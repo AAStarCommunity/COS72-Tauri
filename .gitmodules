@@ -1,0 +1,3 @@
+[submodule "external/teaclave-trustzone-sdk"]
+	path = external/teaclave-trustzone-sdk
+	url = https://github.com/apache/incubator-teaclave-trustzone-sdk.git
