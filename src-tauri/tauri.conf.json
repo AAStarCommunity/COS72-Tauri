@@ -1,14 +1,14 @@
 {
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
     "devPath": "http://localhost:3000",
     "distDir": "../out",
     "withGlobalTauri": false
   },
   "package": {
     "productName": "COS72",
-    "version": "0.2.0"
+    "version": "0.2.2"
   },
   "tauri": {
     "allowlist": {

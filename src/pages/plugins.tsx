@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/tauri';
 import Head from 'next/head';
 import Link from 'next/link';
+import { invokeCommand, isTauriEnvironment } from '../lib/tauri-api';
 
 // 硬件信息接口
 interface HardwareInfo {
@@ -38,6 +38,12 @@ export default function Plugins() {
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
   const [status, setStatus] = useState('加载中...');
   const [hardwareInfo, setHardwareInfo] = useState<HardwareInfo | null>(null);
+  const [environment, setEnvironment] = useState<string>('检测中...');
+  
+  // 检测环境
+  useEffect(() => {
+    setEnvironment(isTauriEnvironment() ? 'Tauri 应用' : '网页浏览器');
+  }, []);
   
   // 模拟插件数据
   const mockPlugins: Plugin[] = [
@@ -67,13 +73,13 @@ export default function Plugins() {
   useEffect(() => {
     const checkHardware = async () => {
       try {
-        const info = await invoke('check_hardware') as HardwareInfo;
+        const info = await invokeCommand('check_hardware') as HardwareInfo;
         setHardwareInfo(info);
         
         // 获取已安装插件
         try {
           // 实际实现中应调用Rust后端获取已安装插件
-          // const plugins = await invoke('get_installed_plugins');
+          // const plugins = await invokeCommand('get_installed_plugins');
           // setInstalledPlugins(plugins);
           setInstalledPlugins([]);
         } catch (error) {
@@ -113,7 +119,7 @@ export default function Plugins() {
     try {
       // 实际实现中应调用Rust后端下载插件
       // const targetPath = `plugins/${plugin.id}-${plugin.version}.zip`;
-      // await invoke('download_tee_plugin', { url: plugin.url, targetPath });
+      // await invokeCommand('download_tee_plugin', { url: plugin.url, targetPath });
       
       // 模拟下载完成
       setTimeout(() => {
@@ -136,7 +142,7 @@ export default function Plugins() {
     
     try {
       // 实际实现中应调用Rust后端验证插件哈希
-      // const isValid = await invoke('verify_plugin_hash', { 
+      // const isValid = await invokeCommand('verify_plugin_hash', { 
       //   filePath: `plugins/${plugin.id}-${plugin.version}.zip`,
       //   expectedHash: plugin.hash
       // });
@@ -200,6 +206,7 @@ export default function Plugins() {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">系统状态</h2>
           <p className="mb-2">{status}</p>
+          <p className="text-sm text-gray-500 mb-4">运行环境: {environment}</p>
           
           {hardwareInfo && (
             <div className="p-4 bg-gray-50 rounded mb-4">

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/tauri';
-import { appWindow } from '@tauri-apps/api/window';
 import Head from 'next/head';
 import Link from 'next/link';
+// 导入新的API包装器，而不是直接使用@tauri-apps/api
+import { invokeCommand, isTauriEnvironment } from '../lib/tauri-api';
 
 // 硬件信息接口
 interface HardwareInfo {
@@ -36,28 +36,72 @@ export default function Home() {
   const [hardwareInfo, setHardwareInfo] = useState<HardwareInfo | null>(null);
   const [teeStatus, setTeeStatus] = useState<TeeStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [environment, setEnvironment] = useState<string>('检测中...');
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
+
+  // 检测环境
+  useEffect(() => {
+    const env = isTauriEnvironment() ? 'Tauri 应用' : '网页浏览器';
+    console.log(`检测到环境: ${env}`);
+    setEnvironment(env);
+
+    // 检查window对象上的Tauri属性
+    if (typeof window !== 'undefined') {
+      console.log('window.__TAURI__存在:', !!window.__TAURI__);
+      console.log('window.__TAURI_IPC__类型:', typeof window.__TAURI_IPC__);
+      
+      // 检查Tauri API是否可用
+      if (isTauriEnvironment()) {
+        import('@tauri-apps/api/tauri').then(() => {
+          console.log('Tauri API导入成功');
+        }).catch(err => {
+          console.error('Tauri API导入失败:', err);
+          setErrorDetails(`Tauri API导入失败: ${err.message}`);
+        });
+      }
+    }
+  }, []);
 
   // 检测硬件信息
   useEffect(() => {
     const checkHardware = async () => {
       try {
         setIsLoading(true);
-        const info = await invoke('check_hardware') as HardwareInfo;
-        setHardwareInfo(info);
-        setStatus('硬件检测完成');
+        console.log('开始检测硬件信息...');
         
-        // 获取TEE状态
-        if (info.tee.tee_type !== 'none') {
-          try {
-            const teeStatusResult = await invoke('get_tee_status');
-            setTeeStatus(teeStatusResult as TeeStatus);
-          } catch (error) {
-            console.error('Failed to get TEE status:', error);
+        try {
+          const info = await invokeCommand('check_hardware') as HardwareInfo;
+          console.log('硬件信息获取成功:', info);
+          setHardwareInfo(info);
+          setStatus('硬件检测完成');
+          
+          // 获取TEE状态
+          if (info.tee.tee_type !== 'none') {
+            console.log('检测到TEE支持，获取TEE状态...');
+            try {
+              const teeStatusResult = await invokeCommand('get_tee_status');
+              console.log('TEE状态获取成功:', teeStatusResult);
+              setTeeStatus(teeStatusResult as TeeStatus);
+            } catch (teeError) {
+              console.error('获取TEE状态失败:', teeError);
+              setErrorDetails(`获取TEE状态失败: ${teeError instanceof Error ? teeError.message : String(teeError)}`);
+            }
+          } else {
+            console.log('设备不支持TEE');
           }
+        } catch (hwError) {
+          console.error('硬件信息查询失败:', hwError);
+          throw hwError;
         }
       } catch (error) {
-        console.error('Hardware detection error:', error);
-        setStatus(`硬件检测失败: ${error}`);
+        console.error('硬件检测错误:', error);
+        setStatus(`硬件检测失败: ${error instanceof Error ? error.message : String(error)}`);
+        setErrorDetails(
+          error instanceof Error 
+            ? `错误类型: ${error.name}\n消息: ${error.message}\n堆栈: ${error.stack || '无堆栈信息'}` 
+            : `未知错误: ${String(error)}`
+        );
       } finally {
         setIsLoading(false);
       }
@@ -73,7 +117,7 @@ export default function Home() {
       setStatus('处理签名请求...');
       // 模拟挑战字符串 (base64)
       const challenge = 'SGVsbG8sIHRoaXMgaXMgYSB0ZXN0IGNoYWxsZW5nZQ==';
-      const signature = await invoke('get_challenge_signature', { challenge });
+      const signature = await invokeCommand('get_challenge_signature', { challenge });
       setStatus(`签名成功: ${signature}`);
     } catch (error) {
       console.error('Signature error:', error);
@@ -90,11 +134,11 @@ export default function Home() {
     
     try {
       setStatus('正在初始化TEE环境...');
-      const result = await invoke('initialize_tee');
+      const result = await invokeCommand('initialize_tee');
       if (result) {
         setStatus('TEE初始化成功');
         // 刷新TEE状态
-        const newStatus = await invoke('get_tee_status');
+        const newStatus = await invokeCommand('get_tee_status');
         setTeeStatus(newStatus as TeeStatus);
       } else {
         setStatus('TEE初始化失败');
@@ -109,7 +153,7 @@ export default function Home() {
   const handleCreateWallet = async () => {
     try {
       setStatus('正在创建钱包...');
-      const result = await invoke('perform_tee_operation', { 
+      const result = await invokeCommand('perform_tee_operation', { 
         operation: 'create_wallet',
         params: null
       });
@@ -117,7 +161,7 @@ export default function Home() {
       if ((result as any).success) {
         setStatus('钱包创建成功');
         // 刷新TEE状态
-        const newStatus = await invoke('get_tee_status');
+        const newStatus = await invokeCommand('get_tee_status');
         setTeeStatus(newStatus as TeeStatus);
       } else {
         setStatus(`钱包创建失败: ${(result as any).message}`);
@@ -126,6 +170,11 @@ export default function Home() {
       console.error('Wallet creation error:', error);
       setStatus(`钱包创建失败: ${error}`);
     }
+  };
+
+  // 切换调试信息显示
+  const toggleDebug = () => {
+    setShowDebug(prev => !prev);
   };
 
   return (
@@ -142,6 +191,39 @@ export default function Home() {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">系统状态</h2>
           <p className="mb-2">{status}</p>
+          <p className="text-sm text-gray-500 mb-4">运行环境: {environment}</p>
+          
+          {/* 调试按钮 */}
+          <div className="mb-4 flex justify-end">
+            <button 
+              onClick={toggleDebug}
+              className="text-xs px-2 py-1 bg-gray-200 hover:bg-gray-300 rounded"
+            >
+              {showDebug ? '隐藏调试信息' : '显示调试信息'}
+            </button>
+          </div>
+          
+          {/* 错误详情 */}
+          {errorDetails && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 mb-4">
+              <p className="font-semibold">错误详情:</p>
+              <pre className="text-xs mt-1 whitespace-pre-wrap">{errorDetails}</pre>
+            </div>
+          )}
+          
+          {/* 调试信息 */}
+          {showDebug && (
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded text-gray-700 mb-4">
+              <p className="font-semibold">调试信息:</p>
+              <ul className="text-xs mt-1">
+                <li>运行环境: {environment}</li>
+                <li>window.__TAURI__: {typeof window !== 'undefined' ? String(!!window.__TAURI__) : 'undefined'}</li>
+                <li>window.__TAURI_IPC__: {typeof window !== 'undefined' ? typeof window.__TAURI_IPC__ : 'undefined'}</li>
+                <li>isTauriEnvironment(): {String(isTauriEnvironment())}</li>
+                <li>User Agent: {typeof navigator !== 'undefined' ? navigator.userAgent : 'undefined'}</li>
+              </ul>
+            </div>
+          )}
           
           {isLoading ? (
             <div className="flex justify-center my-4">
@@ -195,7 +277,16 @@ export default function Home() {
               )}
             </div>
           ) : (
-            <p className="text-red-500">无法获取硬件信息</p>
+            <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700">
+              <p className="font-semibold">无法获取硬件信息</p>
+              <p className="text-sm mt-1">请检查应用权限和系统状态</p>
+              <button 
+                onClick={() => window.location.reload()}
+                className="mt-2 bg-red-500 hover:bg-red-600 text-white py-1 px-3 text-sm rounded"
+              >
+                重试
+              </button>
+            </div>
           )}
         </div>
 
@@ -232,7 +323,7 @@ export default function Home() {
       </main>
 
       <footer className="text-center py-6 text-gray-600">
-        <p>COS72 - 社区操作系统 v0.2.0</p>
+        <p>COS72 - 社区操作系统 v0.2.1</p>
       </footer>
     </div>
   );

@@ -15,16 +15,35 @@ use tee::{TeeOperation, TeeResult, TeeStatus};
 
 // 主程序入口
 fn main() {
+    run();
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    // 启用详细日志
+    println!("COS72-Tauri: 应用启动中...");
+    println!("COS72-Tauri: Rust版本: {}", rustc_version_runtime::version());
+    println!("COS72-Tauri: 操作系统: {}", std::env::consts::OS);
+    println!("COS72-Tauri: 架构: {}", std::env::consts::ARCH);
+
+    // 检查重要的环境变量和路径
+    println!("COS72-Tauri: 当前目录: {:?}", std::env::current_dir().unwrap_or_default());
+    println!("COS72-Tauri: 临时目录: {:?}", std::env::temp_dir());
+    
+    // 检查Tauri资源目录
+    if let Ok(exe_path) = std::env::current_exe() {
+        println!("COS72-Tauri: 可执行文件路径: {:?}", exe_path);
+    }
+
     // 初始化应用
-    tauri::Builder::default()
-        .setup(|app| {
-            #[cfg(debug_assertions)]
-            {
-                let window = app.get_window("main").unwrap();
-                window.open_devtools();
-            }
-            Ok(())
-        })
+    println!("COS72-Tauri: 初始化Tauri应用...");
+    
+    // 使用更健壮的错误处理
+    match tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_os::init())
         .invoke_handler(tauri::generate_handler![
             check_hardware,
             get_cpu_info,
@@ -36,8 +55,47 @@ fn main() {
             initialize_tee,
             perform_tee_operation
         ])
-        .run(tauri::generate_context!())
-        .expect("Error while running Tauri application");
+        .setup(|app| {
+            println!("COS72-Tauri: 应用设置阶段...");
+            println!("COS72-Tauri: 检查资源路径: {:?}", app.path().resource_dir());
+            println!("COS72-Tauri: 检查配置路径: {:?}", app.path().app_config_dir());
+            println!("COS72-Tauri: 检查日志路径: {:?}", app.path().app_log_dir());
+            Ok(())
+        })
+        .build(tauri::generate_context!()) {
+        Ok(app) => {
+            println!("COS72-Tauri: 应用构建成功，准备运行...");
+            app.run(|_app_handle, event| {
+                match event {
+                    tauri::RunEvent::Ready => {
+                        println!("COS72-Tauri: 应用已就绪");
+                    }
+                    tauri::RunEvent::WindowEvent { label, event, .. } => {
+                        match event {
+                            tauri::WindowEvent::CloseRequested { api, .. } => {
+                                println!("COS72-Tauri: 窗口 {} 请求关闭", label);
+                            }
+                            tauri::WindowEvent::Destroyed => {
+                                println!("COS72-Tauri: 窗口 {} 已销毁", label);
+                            }
+                            _ => {}
+                        }
+                    }
+                    tauri::RunEvent::Exit => {
+                        println!("COS72-Tauri: 应用退出");
+                    }
+                    _ => {}
+                }
+            });
+        }
+        Err(err) => {
+            println!("COS72-Tauri: 应用构建失败: {:?}", err);
+            if let Some(source) = err.source() {
+                println!("COS72-Tauri: 错误源: {:?}", source);
+            }
+            // 在生产环境中，可能需要考虑适当的错误处理策略
+        }
+    }
 }
 
 // 检查硬件信息

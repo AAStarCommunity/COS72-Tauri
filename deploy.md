@@ -1,7 +1,7 @@
 # COS72-Tauri 部署与运行指南
 
 本文档详细说明了COS72-Tauri应用的初始化、编译、测试和发布步骤，包括前端(Node.js)和后端(Rust)部分。
-最后更新：v0.2.0
+最后更新：v0.2.2
 
 ## 先决条件
 
@@ -32,6 +32,42 @@
    - **Linux**: 
      - 基本构建工具 (`build-essential`)
      - WebKit2GTK (`libwebkit2gtk-4.0-dev`)
+
+## v0.2.2 更新说明
+
+### 依赖更新
+
+在v0.2.2中，我们更新了Tauri插件依赖，将仓库分支从"dev"改为"v2"，这是因为Tauri 2.0正式版已于2023年10月发布，
+插件仓库的主要开发分支也相应变更。
+
+### 新增运行脚本
+
+添加了`run.sh`脚本，用于简化项目的构建和调试：
+
+```bash
+# 赋予脚本执行权限
+chmod +x run.sh
+
+# 运行脚本
+./run.sh
+```
+
+这个脚本会：
+- 安装前端依赖
+- 启动开发服务器
+- 自动捕获并保存日志到`logs`目录
+
+### 构建步骤更新
+
+当使用v0.2.2版本时，请确保使用最新的Tauri CLI：
+
+```bash
+# 安装或更新Tauri CLI
+npm install -g @tauri-apps/cli@latest
+
+# 或使用pnpm
+pnpm add -g @tauri-apps/cli@latest
+```
 
 ## 环境准备
 
@@ -656,4 +692,80 @@ cargo build
 
 # 运行完整应用（开发模式）
 pnpm tauri:dev
-``` 
+```
+
+## 开发模式扩展说明
+
+### 前端开发模式
+
+为了便于前端开发，项目支持两种开发模式：
+
+1. 纯前端开发模式 (无需Rust环境)
+```bash
+# 安装依赖
+pnpm install
+
+# 启动前端开发服务器
+pnpm dev
+```
+
+在这种模式下，前端会使用mock数据模拟Tauri API的响应，便于UI开发和测试。可通过浏览器访问 http://localhost:3000 查看效果。
+
+2. Tauri开发模式 (需要完整的Rust环境)
+```bash
+# 确保Rust环境已正确配置
+export PATH="$HOME/.cargo/bin:$PATH"
+
+# 安装依赖
+pnpm install
+
+# 启动Tauri开发服务
+pnpm tauri:dev
+```
+
+这种模式会同时启动前端和Rust后端，创建完整的Tauri应用窗口。
+
+### 环境准备补充说明
+
+1. Rust环境配置
+```bash
+# 安装Rust (如未安装)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# 添加Rust到PATH
+export PATH="$HOME/.cargo/bin:$PATH"
+
+# 验证安装
+rustc --version
+cargo --version
+```
+
+2. 针对Apple Silicon (M系列)的特殊配置
+```bash
+# 安装Xcode命令行工具
+xcode-select --install
+
+# 可能需要安装特定的依赖
+brew install gcc libiconv
+```
+
+### 构建发布版本
+
+```bash
+# 构建前端
+pnpm build
+
+# 构建Tauri应用 (macOS/Windows/Linux)
+pnpm tauri:build
+
+# 仅构建特定平台
+pnpm tauri build --target darwin-aarch64  # macOS ARM64
+pnpm tauri build --target darwin-x86_64   # macOS Intel
+pnpm tauri build --target windows-x86_64  # Windows
+pnpm tauri build --target linux-x86_64    # Linux
+```
+
+构建完成后，应用将在以下位置生成：
+- macOS: `src-tauri/target/release/bundle/macos/COS72.app`
+- Windows: `src-tauri/target/release/bundle/msi/COS72_x.x.x_x64.msi`
+- Linux: `src-tauri/target/release/bundle/deb/cos72-tauri_x.x.x_amd64.deb` 

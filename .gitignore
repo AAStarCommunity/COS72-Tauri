@@ -134,3 +134,16 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Rust specific
+/target/
+**/*.rs.bk
+src-tauri/target/
+.cargo/
+.rustc_info.json
+*.pdb
+
+# macOS specific
+.DS_Store
+.AppleDouble
+.LSOverride

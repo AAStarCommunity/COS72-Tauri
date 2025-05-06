@@ -1,6 +1,6 @@
 {
   "name": "cos72-tauri",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -13,7 +13,7 @@
     "tauri:build": "tauri build"
   },
   "dependencies": {
-    "@tauri-apps/api": "^1.4.0",
+    "@tauri-apps/api": "^2.0.0",
     "autoprefixer": "^10.4.16",
     "next": "^13.5.4",
     "postcss": "^8.4.31",
@@ -22,7 +22,7 @@
     "tailwindcss": "^3.3.3"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^1.4.0",
+    "@tauri-apps/cli": "^2.0.0",
     "@testing-library/jest-dom": "^6.1.4",
     "@testing-library/react": "^14.0.0",
     "@types/jest": "^29.5.5",

@@ -1,6 +1,6 @@
 [package]
 name = "cos72-tauri"
-version = "0.2.0"
+version = "0.2.2"
 description = "Tauri based COS72 application framework"
 authors = ["COS72 Team"]
 license = ""
@@ -10,10 +10,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-tauri-build = { version = "1.4", features = [] }
+tauri-build = { version = "2.0", features = [] }
 
 [dependencies]
-tauri = { version = "1.4", features = [ "shell-open", "dialog-all", "http-all", "fs-all", "os-all"] }
+tauri = { version = "2.0", features = [ "shell-open", "dialog-all", "fs-all", "http-all", "os-all"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sysinfo = "0.29.8"
@@ -22,6 +22,16 @@ hex = "0.4.3"
 reqwest = { version = "0.11.20", features = ["json", "stream"] }
 tokio = { version = "1.32.0", features = ["full"] }
 base64 = "0.21.3"
+rustc_version_runtime = "0.2.1"
+
+# Tauri 2.0插件
+tauri-plugin-dialog = "2.0"
+tauri-plugin-fs = "2.0"
+tauri-plugin-http = "2.0"
+tauri-plugin-os = "2.0"
+
+# 移除外部tauri插件依赖，改为使用tauri内置的功能
+# 这些功能已通过tauri的features参数启用：dialog-all, http-all, fs-all, os-all
 
 [dev-dependencies]
 tempfile = "3.8.0"
