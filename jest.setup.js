@@ -6,7 +6,7 @@ jest.mock('@tauri-apps/api/tauri', () => ({
   invoke: jest.fn().mockImplementation(async (cmd, args) => {
     // 默认模拟数据
     const mockData = {
-      check_hardware: {
+      detect_hardware: {
         cpu: {
           architecture: 'x86_64',
           model_name: 'Mock CPU',

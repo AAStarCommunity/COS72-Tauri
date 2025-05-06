@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { invokeCommand, isTauriEnvironment } from '../lib/tauri-api';
+import { invoke as invokeCommand, isTauriEnvironment } from '../lib/tauri-api';
 
 // 硬件信息接口
 interface HardwareInfo {
@@ -73,7 +73,7 @@ export default function Plugins() {
   useEffect(() => {
     const checkHardware = async () => {
       try {
-        const info = await invokeCommand('check_hardware') as HardwareInfo;
+        const info = await invokeCommand('detect_hardware') as HardwareInfo;
         setHardwareInfo(info);
         
         // 获取已安装插件

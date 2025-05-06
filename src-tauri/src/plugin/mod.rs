@@ -92,14 +92,40 @@ pub fn get_available_plugins() -> Result<Vec<String>, IoError> {
 
 // 获取插件目录
 fn get_plugin_dir() -> Result<std::path::PathBuf, IoError> {
-    // 获取应用数据目录
-    let app_data_dir = tauri::api::path::app_data_dir(&tauri::Config::default())
-        .ok_or_else(|| IoError::new(ErrorKind::NotFound, "Could not determine app data directory"))?;
+    // 在 Tauri 2.0 中，不再使用 tauri::api::path
+    // 而是使用 tauri 根路径，或者系统相关目录
     
-    // 创建插件子目录
-    let plugin_dir = app_data_dir.join("plugins");
+    // 这里我们使用系统的临时目录或应用程序数据目录
+    #[cfg(target_os = "windows")]
+    {
+        let app_data = std::env::var("APPDATA")
+            .map_err(|_| IoError::new(std::io::ErrorKind::NotFound, "APPDATA env var not found"))?;
+        let plugin_dir = std::path::Path::new(&app_data).join("cos72-tauri").join("plugins");
+        Ok(plugin_dir)
+    }
     
-    Ok(plugin_dir)
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var("HOME")
+            .map_err(|_| IoError::new(std::io::ErrorKind::NotFound, "HOME env var not found"))?;
+        let plugin_dir = std::path::Path::new(&home)
+            .join("Library/Application Support/com.cos72.app/plugins");
+        Ok(plugin_dir)
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        let home = std::env::var("HOME")
+            .map_err(|_| IoError::new(std::io::ErrorKind::NotFound, "HOME env var not found"))?;
+        let plugin_dir = std::path::Path::new(&home).join(".local/share/cos72-tauri/plugins");
+        Ok(plugin_dir)
+    }
+    
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        // 对于其他平台，使用临时目录
+        Ok(std::env::temp_dir().join("cos72-tauri/plugins"))
+    }
 }
 
 #[cfg(test)]

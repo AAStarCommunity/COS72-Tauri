@@ -184,4 +184,64 @@ Teaclave TrustZone SDK的eth_wallet项目采用标准TA/CA架构：
 
 ### 已修改文件
 - src-tauri/Cargo.toml - 更新Tauri插件依赖分支
-- CHANGES.md - 添加v0.2.2版本变更记录 
+- CHANGES.md - 添加v0.2.2版本变更记录
+
+## [0.2.3] - 2023-12-15 (升级)
+
+### Tauri 2.0 升级
+- 从 Tauri 1.x 升级到 Tauri 2.0.0-beta
+- 重构了API调用和配置文件格式
+- 调整了插件依赖和配置模式
+
+### 配置文件调整
+- 修改了tauri.conf.json格式以适应Tauri 2.0要求
+- 将`devPath`改为`devUrl`，`distDir`改为`frontendDist`
+- 调整了`window`配置和`app`结构
+- 移除了不兼容的配置项，如`identifier`（移至根级别）
+
+### API调整
+- 重构了main.rs以适应Tauri 2.0的插件注册方式
+- 更新了invoke命令为异步函数方式
+- 修复了前端API调用，适配新的Tauri调用方式
+- 改进了tauri-api.ts以支持Tauri 2.0的API调用方式
+
+### 前端适配
+- 调整了前端代码以适应Tauri 2.0 API
+- 修改了tauri导入方式，改为使用内置API
+- 更新了API调用中的参数格式
+
+### 已修改文件
+- src-tauri/Cargo.toml - 更新Tauri依赖到2.0.0-beta
+- src-tauri/tauri.conf.json - 调整配置格式适配Tauri 2.0
+- src-tauri/src/main.rs - 更新API实现为异步函数
+- src-tauri/src/plugin/mod.rs - 调整插件目录获取逻辑
+- src-tauri/src/tee/mod.rs - 为TeeError实现Display特性
+- src/lib/tauri-api.ts - 更新API调用方式以适应Tauri 2.0
+- src/pages/index.tsx - 更新前端API调用
+- src/pages/plugins.tsx - 更新前端API调用
+- package.json - 更新@tauri-apps/api和@tauri-apps/cli依赖到2.0版本
+- CHANGES.md - 添加v0.2.3版本变更记录 
+
+## [0.2.4] - 2023-12-20 (测试增强)
+
+### 测试工具增强
+- 添加了专门的硬件检测测试模块，确保正确性
+- 创建了调试页面(/debug)，用于实时测试Tauri命令
+- 添加了直接测试脚本，通过Rust直接调用硬件检测功能
+- 修复了命令名称不匹配问题，确保前端和后端使用相同的命令名
+
+### 技术实现
+- 在Rust端添加了专门的测试模块(hardware/detect_test.rs)
+- 创建了直接运行的测试示例(examples/direct_test.rs)
+- 添加了前端调试界面，支持动态测试所有Tauri命令
+- 统一了命令名称，使用'detect_hardware'替代'check_hardware'
+
+### 已修改文件
+- src-tauri/src/hardware/mod.rs - 添加测试模块
+- src-tauri/src/hardware/detect_test.rs - 新建测试文件
+- src-tauri/examples/direct_test.rs - 新建直接测试脚本
+- src-tauri/Cargo.toml - 添加examples配置
+- src/pages/debug.tsx - 新建调试页面
+- src/pages/index.tsx - 添加调试页面链接
+- jest.setup.js - 更新mock命令名称
+- CHANGES.md - 添加v0.2.4版本变更记录 

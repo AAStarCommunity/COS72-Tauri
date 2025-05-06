@@ -1,4 +1,6 @@
 pub mod detect;
+#[cfg(test)]
+mod detect_test;
 
 use serde::{Serialize, Deserialize};
 

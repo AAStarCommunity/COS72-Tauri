@@ -3,6 +3,7 @@
 
 use serde::{Serialize, Deserialize};
 use std::io::Error as IoError;
+use std::fmt;
 
 // TEE操作类型
 #[derive(Debug, Serialize, Deserialize)]
@@ -40,6 +41,18 @@ pub enum TeeError {
     NotInitialized,               // TEE未初始化
     OperationFailed(String),      // 操作失败
     IoError(IoError),             // IO错误
+}
+
+// 为 TeeError 实现 Display 特性
+impl fmt::Display for TeeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TeeError::NotSupported => write!(f, "TEE not supported on this device"),
+            TeeError::NotInitialized => write!(f, "TEE environment not initialized"),
+            TeeError::OperationFailed(msg) => write!(f, "TEE operation failed: {}", msg),
+            TeeError::IoError(e) => write!(f, "I/O error: {}", e),
+        }
+    }
 }
 
 impl From<IoError> for TeeError {

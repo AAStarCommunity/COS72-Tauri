@@ -70,7 +70,7 @@ export function mockInvoke(command: string, args?: Record<string, any>): Promise
   console.log(`[MOCK] Tauri invoke: ${command}`, args);
   
   switch (command) {
-    case 'check_hardware':
+    case 'detect_hardware':
       return Promise.resolve(currentConfig);
     
     case 'get_tee_status':
@@ -94,14 +94,26 @@ export function mockInvoke(command: string, args?: Record<string, any>): Promise
         return Promise.reject(new Error('TEE not supported on this device'));
       }
       
-      if (args?.operation === 'create_wallet') {
+      // 检查操作类型 - 从Rust端接收的是字符串枚举
+      if (args?.operation === 'CreateWallet') {
         mockTeeStatus.wallet_created = true;
-        return Promise.resolve({ success: true });
+        return Promise.resolve({ 
+          success: true,
+          message: "钱包创建成功",
+          data: null
+        });
       }
-      return Promise.resolve({ success: false, message: "操作不支持" });
+      return Promise.resolve({ 
+        success: false, 
+        message: "操作不支持",
+        data: null
+      });
     
-    case 'get_challenge_signature':
-      return Promise.resolve("模拟签名结果 - 实际Tauri环境中会返回真实签名");
+    case 'verify_passkey':
+      return Promise.resolve({ 
+        success: true, 
+        signature: "模拟签名结果 - 实际Tauri环境中会返回真实签名" 
+      });
     
     default:
       return Promise.reject(new Error(`未实现的命令: ${command}`));

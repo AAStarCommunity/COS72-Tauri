@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 // 导入新的API包装器，而不是直接使用@tauri-apps/api
-import { invokeCommand, isTauriEnvironment } from '../lib/tauri-api';
+import { invoke as invokeCommand, isTauriEnvironment } from '../lib/tauri-api';
 
 // 硬件信息接口
 interface HardwareInfo {
@@ -51,14 +51,9 @@ export default function Home() {
       console.log('window.__TAURI__存在:', !!window.__TAURI__);
       console.log('window.__TAURI_IPC__类型:', typeof window.__TAURI_IPC__);
       
-      // 检查Tauri API是否可用
+      // 在Tauri 2.0中，不再需要导入@tauri-apps/api/tauri
       if (isTauriEnvironment()) {
-        import('@tauri-apps/api/tauri').then(() => {
-          console.log('Tauri API导入成功');
-        }).catch(err => {
-          console.error('Tauri API导入失败:', err);
-          setErrorDetails(`Tauri API导入失败: ${err.message}`);
-        });
+        console.log('在Tauri环境中运行，无需导入API');
       }
     }
   }, []);
@@ -71,7 +66,7 @@ export default function Home() {
         console.log('开始检测硬件信息...');
         
         try {
-          const info = await invokeCommand('check_hardware') as HardwareInfo;
+          const info = await invokeCommand('detect_hardware') as HardwareInfo;
           console.log('硬件信息获取成功:', info);
           setHardwareInfo(info);
           setStatus('硬件检测完成');
@@ -117,7 +112,7 @@ export default function Home() {
       setStatus('处理签名请求...');
       // 模拟挑战字符串 (base64)
       const challenge = 'SGVsbG8sIHRoaXMgaXMgYSB0ZXN0IGNoYWxsZW5nZQ==';
-      const signature = await invokeCommand('get_challenge_signature', { challenge });
+      const signature = await invokeCommand('verify_passkey', { challenge });
       setStatus(`签名成功: ${signature}`);
     } catch (error) {
       console.error('Signature error:', error);
@@ -154,8 +149,7 @@ export default function Home() {
     try {
       setStatus('正在创建钱包...');
       const result = await invokeCommand('perform_tee_operation', { 
-        operation: 'create_wallet',
-        params: null
+        operation: 'CreateWallet'
       });
       
       if ((result as any).success) {
@@ -323,7 +317,14 @@ export default function Home() {
       </main>
 
       <footer className="text-center py-6 text-gray-600">
-        <p>COS72 - 社区操作系统 v0.2.1</p>
+        <p>COS72 - 社区操作系统 v0.2.3</p>
+        <p className="mt-2">
+          <Link href="/debug">
+            <span className="text-blue-500 hover:text-blue-700 text-sm cursor-pointer">
+              调试页面
+            </span>
+          </Link>
+        </p>
       </footer>
     </div>
   );

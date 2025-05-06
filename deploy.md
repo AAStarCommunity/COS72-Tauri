@@ -215,7 +215,7 @@ v0.2.0版本实现的 Tauri 命令 API:
 
 | API 名称 | 描述 | 参数 | 返回值 |
 |---------|------|------|--------|
-| `check_hardware` | 获取完整硬件信息 | 无 | `Result<HardwareInfo, String>` |
+| `detect_hardware` | 获取完整硬件信息 | 无 | `Result<HardwareInfo, String>` |
 | `get_cpu_info` | 获取CPU信息 | 无 | `Result<CpuInfo, String>` |
 | `check_tee_support` | 检查TEE支持情况 | 无 | `Result<TeeSupport, String>` |
 | `get_challenge_signature` | 使用生物识别对挑战进行签名 | `challenge: String` | `Result<String, String>` |
@@ -570,7 +570,7 @@ jobs:
 import { invoke } from '@tauri-apps/api/tauri';
 
 // 获取完整硬件信息
-const hardwareInfo = await invoke('check_hardware');
+const hardwareInfo = await invoke('detect_hardware');
 console.log('CPU信息:', hardwareInfo.cpu);
 console.log('内存:', hardwareInfo.memory, 'MB');
 console.log('TEE支持:', hardwareInfo.tee);
