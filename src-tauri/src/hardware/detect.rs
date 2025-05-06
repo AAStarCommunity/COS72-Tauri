@@ -113,7 +113,8 @@ fn detect_trustzone_support() -> bool {
 fn detect_secure_enclave_support() -> bool {
     // 实际中应当使用Security.framework API检测
     // 这里简化为检查是否是较新的Apple Silicon或Touch ID设备
-    let cpu_info = System::new_all().global_cpu_info();
+    let system = System::new_all();
+    let cpu_info = system.global_cpu_info();
     cpu_info.brand().contains("Apple") && (
         std::env::consts::ARCH == "aarch64" || // Apple Silicon
         cpu_info.brand().contains("T1") || // Apple T1

@@ -87,11 +87,11 @@ pub async fn perform_tee_operation(op: TeeOperation) -> Result<TeeResult, TeeErr
             // 实际实现应在TEE中创建钱包
             Err(TeeError::OperationFailed("尚未实现".to_string()))
         },
-        TeeOperation::SignTransaction(tx_data) => {
+        TeeOperation::SignTransaction(_tx_data) => {
             // 实际实现应在TEE中对交易进行签名
             Err(TeeError::OperationFailed("尚未实现".to_string()))
         },
-        TeeOperation::VerifySignature(message, signature) => {
+        TeeOperation::VerifySignature(_message, _signature) => {
             // 实际实现应在TEE中验证签名
             Err(TeeError::OperationFailed("尚未实现".to_string()))
         },
@@ -99,11 +99,11 @@ pub async fn perform_tee_operation(op: TeeOperation) -> Result<TeeResult, TeeErr
             // 实际实现应从TEE中获取公钥
             Err(TeeError::OperationFailed("尚未实现".to_string()))
         },
-        TeeOperation::ExportWallet(include_private_key) => {
+        TeeOperation::ExportWallet(_include_private_key) => {
             // 实际实现应从TEE中导出钱包
             Err(TeeError::OperationFailed("尚未实现".to_string()))
         },
-        TeeOperation::ImportWallet(wallet_data) => {
+        TeeOperation::ImportWallet(_wallet_data) => {
             // 实际实现应将钱包导入TEE
             Err(TeeError::OperationFailed("尚未实现".to_string()))
         }

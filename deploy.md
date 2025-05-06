@@ -3,6 +3,36 @@
 本文档详细说明了COS72-Tauri应用的初始化、编译、测试和发布步骤，包括前端(Node.js)和后端(Rust)部分。
 最后更新：v0.2.0
 
+## 先决条件
+
+**重要提示**: 在开始之前，确保已安装以下工具和依赖项。缺少任何一项都可能导致构建失败。
+
+1. **Rust 和 Cargo**: 
+   - Rust是构建Tauri应用的基础要求
+   - 最低版本: 1.60.0
+   - 安装命令: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+   - 验证安装: `rustc --version && cargo --version`
+
+2. **Node.js**: 
+   - 最低版本: 16.x
+   - 推荐使用nvm安装: `nvm install 16`
+   - 验证安装: `node --version`
+
+3. **pnpm**: 
+   - 推荐版本: 7.x或更高
+   - 安装命令: `npm install -g pnpm`
+   - 验证安装: `pnpm --version`
+
+4. **平台特定依赖**:
+   - **Windows**: 
+     - Microsoft Visual C++ Build Tools
+     - WebView2
+   - **macOS**: 
+     - Xcode Command Line Tools (`xcode-select --install`)
+   - **Linux**: 
+     - 基本构建工具 (`build-essential`)
+     - WebKit2GTK (`libwebkit2gtk-4.0-dev`)
+
 ## 环境准备
 
 ### 必要工具

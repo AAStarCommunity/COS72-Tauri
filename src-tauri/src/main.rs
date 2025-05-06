@@ -11,8 +11,7 @@ mod plugin;
 use tauri::Manager;
 use hardware::detect;
 use fido::passkey;
-use tee::{TeeOperation, TeeResult, TeeStatus, TeeError};
-use std::sync::Arc;
+use tee::{TeeOperation, TeeResult, TeeStatus};
 
 // 主程序入口
 fn main() {
