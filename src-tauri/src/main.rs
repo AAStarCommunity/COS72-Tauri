@@ -31,7 +31,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             detect_hardware,
             verify_passkey,
-            perform_tee_operation
+            perform_tee_operation,
+            get_tee_status
         ])
         // 应用初始化事件处理
         .setup(|_app| {
@@ -82,6 +83,23 @@ async fn verify_passkey(challenge: String) -> Result<Value, String> {
         Err(e) => {
             println!("COS72-Tauri: FIDO2验证失败: {}", e);
             Err(format!("FIDO2验证失败: {}", e))
+        }
+    }
+}
+
+// TEE状态获取函数
+#[tauri::command]
+async fn get_tee_status() -> Result<tee::TeeStatus, String> {
+    println!("COS72-Tauri: 正在获取TEE状态...");
+    
+    match tee::get_tee_status() {
+        Ok(status) => {
+            println!("COS72-Tauri: TEE状态获取成功: {:?}", status);
+            Ok(status)
+        },
+        Err(e) => {
+            println!("COS72-Tauri: TEE状态获取失败: {:?}", e);
+            Err(format!("TEE状态获取失败: {:?}", e))
         }
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "cos72-tauri"
-version = "0.2.3"
+version = "0.2.6"
 description = "Tauri based COS72 application framework"
 authors = ["COS72 Team"]
 license = ""

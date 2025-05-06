@@ -2,13 +2,12 @@
 import { mockInvoke, setMockHardwareType } from './tauri-mock';
 
 // 调试模式
-const DEBUG = true;
+const DEBUG = true; // 始终启用调试
 
 // 调试日志函数
 function debugLog(...args: any[]) {
-  if (DEBUG) {
-    console.log('[TAURI-API]', ...args);
-  }
+  // 不论DEBUG设置如何，始终输出日志
+  console.log('[TAURI-API]', ...args);
 }
 
 // 为Tauri全局变量增加类型声明
@@ -24,19 +23,29 @@ declare global {
 
 // 检测是否在Tauri环境中运行 - 兼容Tauri 2.0
 export const isTauriEnvironment = (): boolean => {
-  // Tauri 2.0 和 1.0 的检测有所不同
-  const isTauri = typeof window !== 'undefined' && 
+  // 检查URL前缀，如果以tauri://开头，肯定是Tauri环境
+  const isTauriUrl = typeof window !== 'undefined' && 
+                    typeof window.location !== 'undefined' && 
+                    window.location.href.startsWith('tauri://');
+  
+  // 检查Tauri对象
+  const hasTauriAPI = typeof window !== 'undefined' && 
          (window.__TAURI_IPC__ !== undefined || window.__TAURI__ !== undefined);
   
-  debugLog('环境检测:', isTauri ? 'Tauri应用' : '网页浏览器');
+  const isInTauriEnv = isTauriUrl || hasTauriAPI;
+  
+  debugLog('环境检测:', isInTauriEnv ? 'Tauri应用' : '网页浏览器');
+  debugLog('URL检测:', isTauriUrl ? 'Tauri URL' : '普通URL');
+  debugLog('API检测:', hasTauriAPI ? '存在Tauri API' : '无Tauri API');
   
   // 检查Tauri对象
   if (typeof window !== 'undefined') {
     debugLog('window.__TAURI__:', window.__TAURI__);
     debugLog('window.__TAURI_IPC__类型:', typeof window.__TAURI_IPC__);
+    debugLog('当前URL:', window.location.href);
   }
   
-  return isTauri;
+  return isInTauriEnv;
 };
 
 // 设置测试用的硬件类型（仅在浏览器模式下有效）
@@ -52,26 +61,44 @@ export function setHardwareType(type: 'arm' | 'x86') {
 // 通用invoke调用，兼容Tauri 2.0和浏览器环境
 export async function invoke<T>(command: string, args?: Record<string, any>): Promise<T> {
   debugLog(`调用命令: ${command}`, args);
+  const isTauri = isTauriEnvironment();
+  debugLog(`环境判断结果: ${isTauri ? 'Tauri环境' : '浏览器环境'}`);
   
   // 检查是否在Tauri环境中
-  if (isTauriEnvironment()) {
+  if (isTauri) {
     try {
+      debugLog('尝试使用Tauri API...');
       // Tauri 2.0支持 - 首选window.__TAURI__直接调用
       if (window.__TAURI__?.invoke) {
-        const result = await window.__TAURI__.invoke(command, args);
-        debugLog(`命令 ${command} 执行成功:`, result);
-        return result as T;
+        debugLog('使用window.__TAURI__.invoke调用');
+        try {
+          const result = await window.__TAURI__.invoke(command, args);
+          debugLog(`命令 ${command} 执行成功:`, result);
+          return result as T;
+        } catch (directError) {
+          debugLog(`window.__TAURI__.invoke调用失败:`, directError);
+          throw directError;
+        }
       }
       
       // 动态导入 - 避免类型检查问题
       try {
+        debugLog('尝试动态导入@tauri-apps/api...');
         const tauriModule = await import('@tauri-apps/api');
         // 使用索引访问以避免TypeScript类型检查错误
         const tauriInvoke = (tauriModule as any).invoke;
+        debugLog('导入的tauriInvoke类型:', typeof tauriInvoke);
         if (typeof tauriInvoke === 'function') {
-          const result = await tauriInvoke(command, args);
-          debugLog(`命令 ${command} 执行成功(动态导入):`, result);
-          return result as T;
+          try {
+            const result = await tauriInvoke(command, args);
+            debugLog(`命令 ${command} 执行成功(动态导入):`, result);
+            return result as T;
+          } catch (invokeError) {
+            debugLog(`tauriInvoke调用失败:`, invokeError);
+            throw invokeError;
+          }
+        } else {
+          debugLog('导入的tauriInvoke不是函数');
         }
       } catch (importError) {
         debugLog('Tauri API导入失败:', importError);
@@ -110,6 +137,11 @@ export async function verifyPasskey(challenge: string) {
 // 执行TEE操作
 export async function performTeeOperation(operation: any) {
   return invoke('perform_tee_operation', { operation });
+}
+
+// 获取TEE状态
+export async function getTeeStatus() {
+  return invoke('get_tee_status');
 }
 
 // 以下是特定功能的API封装

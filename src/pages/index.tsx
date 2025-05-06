@@ -112,11 +112,27 @@ export default function Home() {
       setStatus('处理签名请求...');
       // 模拟挑战字符串 (base64)
       const challenge = 'SGVsbG8sIHRoaXMgaXMgYSB0ZXN0IGNoYWxsZW5nZQ==';
-      const signature = await invokeCommand('verify_passkey', { challenge });
-      setStatus(`签名成功: ${signature}`);
+      
+      console.log('发送签名请求，挑战值:', challenge);
+      const result = await invokeCommand('verify_passkey', { challenge });
+      console.log('签名请求返回结果:', result);
+      
+      // 处理不同格式的返回值
+      if (typeof result === 'object' && result !== null) {
+        if ('signature' in result) {
+          setStatus(`签名成功: ${result.signature}`);
+        } else if ('success' in result && result.success) {
+          setStatus(`签名成功: ${JSON.stringify(result)}`);
+        } else {
+          setStatus(`签名完成: ${JSON.stringify(result)}`);
+        }
+      } else {
+        setStatus(`签名结果: ${String(result)}`);
+      }
     } catch (error) {
-      console.error('Signature error:', error);
-      setStatus(`签名失败: ${error}`);
+      console.error('签名错误:', error);
+      setErrorDetails(error instanceof Error ? error.message : String(error));
+      setStatus(`签名失败: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -301,10 +317,8 @@ export default function Home() {
             {hardwareInfo?.cpu?.is_arm ? (
               <>
                 <p className="text-green-600 mb-2">检测到ARM架构，支持TEE插件</p>
-                <Link href="/plugins">
-                  <span className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded inline-block cursor-pointer">
-                    下载TEE插件
-                  </span>
+                <Link href="/plugins" className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded inline-block cursor-pointer">
+                  下载TEE插件
                 </Link>
               </>
             ) : (
@@ -317,12 +331,10 @@ export default function Home() {
       </main>
 
       <footer className="text-center py-6 text-gray-600">
-        <p>COS72 - 社区操作系统 v0.2.3</p>
+        <p>COS72 - 社区操作系统 v0.2.5</p>
         <p className="mt-2">
-          <Link href="/debug">
-            <span className="text-blue-500 hover:text-blue-700 text-sm cursor-pointer">
-              调试页面
-            </span>
+          <Link href="/debug" className="text-blue-500 hover:text-blue-700 text-sm cursor-pointer">
+            调试页面
           </Link>
         </p>
       </footer>

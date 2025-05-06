@@ -71,6 +71,12 @@ export function mockInvoke(command: string, args?: Record<string, any>): Promise
   
   switch (command) {
     case 'detect_hardware':
+      // 正确处理detect_hardware命令
+      console.log('[MOCK] 返回硬件信息:', currentConfig);
+      return Promise.resolve(currentConfig);
+    
+    case 'check_hardware': // 兼容旧命名
+      console.log('[MOCK] 处理旧命令名称check_hardware，返回硬件信息');
       return Promise.resolve(currentConfig);
     
     case 'get_tee_status':
@@ -110,12 +116,14 @@ export function mockInvoke(command: string, args?: Record<string, any>): Promise
       });
     
     case 'verify_passkey':
+      console.log('[MOCK] 处理verify_passkey命令，参数:', args);
       return Promise.resolve({ 
         success: true, 
         signature: "模拟签名结果 - 实际Tauri环境中会返回真实签名" 
       });
     
     default:
+      console.error(`[MOCK] 未实现的命令: ${command}`);
       return Promise.reject(new Error(`未实现的命令: ${command}`));
   }
 } 

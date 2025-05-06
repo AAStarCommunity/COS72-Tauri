@@ -245,3 +245,42 @@ Teaclave TrustZone SDK的eth_wallet项目采用标准TA/CA架构：
 - src/pages/index.tsx - 添加调试页面链接
 - jest.setup.js - 更新mock命令名称
 - CHANGES.md - 添加v0.2.4版本变更记录 
+
+## [0.2.5] - 2023-12-25 (环境检测修复)
+
+### 环境检测与命令调用修复
+- 增强了Tauri环境检测逻辑，特别是对tauri://URL前缀的识别
+- 添加了更详细的调试日志，帮助诊断命令调用问题
+- 修复了在Tauri环境中被错误识别为浏览器环境的问题
+- 添加了`get_tee_status`命令的注册与实现
+
+### 技术实现
+- 改进了`isTauriEnvironment()`函数，增加URL前缀检测
+- 在`invoke`函数中添加了更详细的错误处理和日志
+- 确保mock实现同时支持新旧命令名称，增强兼容性
+- 在main.rs中注册并实现了缺失的`get_tee_status`命令
+
+### 已修改文件
+- src/lib/tauri-api.ts - 改进环境检测逻辑
+- src/lib/tauri-mock.ts - 增强mock命令处理
+- src-tauri/src/main.rs - 添加get_tee_status命令
+- CHANGES.md - 添加v0.2.5版本变更记录 
+
+## [0.2.6] - 2023-12-30 (UI修复)
+
+### UI修复
+- 修复了Link组件使用方式，解决了Next.js 13的兼容性问题
+- 修复了"测试签名"功能，改进了结果处理逻辑
+- 添加了更详细的签名请求日志，便于调试
+- 添加了缺失的`getTeeStatus`导出函数
+
+### 技术实现
+- 更新了Link组件语法，移除了嵌套span标签
+- 增强了签名结果处理，支持不同格式的返回值
+- 确保调试日志始终显示，不受DEBUG开关影响
+- 在src/lib/tauri-api.ts中导出了getTeeStatus函数
+
+### 已修改文件
+- src/pages/index.tsx - 修复Link组件使用方式和签名处理功能
+- src/lib/tauri-api.ts - 增强调试日志，添加getTeeStatus函数
+- CHANGES.md - 添加v0.2.6版本变更记录 
