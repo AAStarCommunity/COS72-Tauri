@@ -1,5 +1,9 @@
-use std::env;
-use cos72_tauri::hardware::detect;
+// 直接使用项目的mod导入
+mod hardware {
+    include!("../src/hardware/mod.rs");
+}
+
+use hardware::detect;
 
 fn main() {
     println!("直接调用硬件检测函数测试");
