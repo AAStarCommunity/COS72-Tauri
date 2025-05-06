@@ -1,0 +1,15 @@
+{
+  "timestamp": "2025-05-06T16:15:08.454Z",
+  "challenge": "ELufrQ76jtaYFiSWm+J9tMJRH5gXOXNHROcbM2X9jrA=",
+  "result": {
+    "success": true,
+    "rawOutput": "COS72-Tauri: 应用启动中...\nCOS72-Tauri: Rust版本: 1.86.0\nCOS72-Tauri: 操作系统: macos\nCOS72-Tauri: 架构: aarch64\nCOS72-Tauri: 当前目录: \"/Users/nicolasshuaishuai/dev/aastar/COS72-Tauri/src-tauri\"\nCOS72-Tauri: 临时目录: \"/var/folders/d2/krj9yfn10gsbxy_1tnp6vk380000gn/T/\"\nCOS72-Tauri: 应用初始化完成\n",
+    "executionTime": 11733,
+    "rawOutputFile": "raw-output-2025-05-06T16-15-08-445Z.txt"
+  },
+  "environment": {
+    "nodeVersion": "v23.9.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  }
+}

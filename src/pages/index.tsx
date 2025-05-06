@@ -331,10 +331,13 @@ export default function Home() {
       </main>
 
       <footer className="text-center py-6 text-gray-600">
-        <p>COS72 - 社区操作系统 v0.2.5</p>
+        <p>COS72 - 社区操作系统 v0.2.6</p>
         <p className="mt-2">
-          <Link href="/debug" className="text-blue-500 hover:text-blue-700 text-sm cursor-pointer">
+          <Link href="/debug" className="text-blue-500 hover:text-blue-700 text-sm cursor-pointer mr-4">
             调试页面
+          </Link>
+          <Link href="/test-passkey" className="text-blue-500 hover:text-blue-700 text-sm cursor-pointer">
+            FIDO2测试
           </Link>
         </p>
       </footer>

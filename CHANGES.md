@@ -284,3 +284,29 @@ Teaclave TrustZone SDK的eth_wallet项目采用标准TA/CA架构：
 - src/pages/index.tsx - 修复Link组件使用方式和签名处理功能
 - src/lib/tauri-api.ts - 增强调试日志，添加getTeeStatus函数
 - CHANGES.md - 添加v0.2.6版本变更记录 
+
+## v0.2.6 (2023-09-15)
+
+### 改进
+1. 优化了Tauri环境检测逻辑，确保在不同环境下正确判断
+2. 解决了Next.js Link组件使用错误问题
+3. 修复了"测试签名"按钮无响应问题
+4. 修复了"下载TEE插件"显示命令未实现错误
+
+### 新增
+1. 添加了专用Passkey/FIDO2签名测试页面(/test-passkey)
+2. 增加了Node.js命令行测试脚本(test-tauri-passkey.js)，用于直接测试签名功能
+3. 创建了调试页面(/debug)用于测试各种Tauri命令
+
+### 文件变更
+- src/pages/test-passkey.tsx (新增): 专用FIDO2 Passkey测试页面
+- test-tauri-passkey.js (新增): Node.js命令行测试脚本
+- src/pages/index.tsx: 添加FIDO2测试页面链接，更新版本号
+- src/lib/tauri-api.ts: 优化环境检测和命令调用逻辑
+- src-tauri/Cargo.toml: 依赖更新
+- src-tauri/tauri.conf.json: 配置更新
+- package.json: 版本更新为0.2.6
+
+### 注意事项
+- FIDO2签名功能需要在Tauri应用环境中才能正常工作
+- 不同平台(Windows/macOS/Linux)的签名实现有所不同 

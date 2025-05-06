@@ -70,18 +70,42 @@ async fn verify_passkey(challenge: String) -> Result<Value, String> {
     println!("COS72-Tauri: 正在验证FIDO2密钥...");
     println!("COS72-Tauri: 收到挑战: {}", challenge);
     
+    // 检查挑战是否为空
+    if challenge.trim().is_empty() {
+        println!("COS72-Tauri: 错误 - 挑战为空");
+        return Err("挑战不能为空".to_string());
+    }
+    
+    // 检查操作系统
+    println!("COS72-Tauri: 当前操作系统: {}", std::env::consts::OS);
+    println!("COS72-Tauri: 当前架构: {}", std::env::consts::ARCH);
+    
+    // 调用平台特定的签名实现
     match passkey::sign_challenge(&challenge).await {
         Ok(result) => {
             println!("COS72-Tauri: FIDO2验证成功");
+            println!("COS72-Tauri: 签名结果长度: {}", result.len());
+            
             // 将结果转换为 JSON Value
             let json_result = serde_json::json!({
                 "success": true,
-                "signature": result
+                "signature": result,
+                "platform": std::env::consts::OS,
+                "timestamp": chrono::Utc::now().to_rfc3339()
             });
+            println!("COS72-Tauri: 返回JSON结果: {}", json_result);
             Ok(json_result)
         },
         Err(e) => {
             println!("COS72-Tauri: FIDO2验证失败: {}", e);
+            // 返回更详细的错误信息
+            let error_json = serde_json::json!({
+                "success": false,
+                "error": e.to_string(),
+                "platform": std::env::consts::OS,
+                "timestamp": chrono::Utc::now().to_rfc3339()
+            });
+            println!("COS72-Tauri: 返回错误JSON: {}", error_json);
             Err(format!("FIDO2验证失败: {}", e))
         }
     }

@@ -1,0 +1,7 @@
+COS72-Tauri: 应用启动中...
+COS72-Tauri: Rust版本: 1.86.0
+COS72-Tauri: 操作系统: macos
+COS72-Tauri: 架构: aarch64
+COS72-Tauri: 当前目录: "/Users/nicolasshuaishuai/dev/aastar/COS72-Tauri/src-tauri"
+COS72-Tauri: 临时目录: "/var/folders/d2/krj9yfn10gsbxy_1tnp6vk380000gn/T/"
+COS72-Tauri: 应用初始化完成

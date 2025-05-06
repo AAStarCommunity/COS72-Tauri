@@ -198,8 +198,8 @@ export default function Plugins() {
       <main className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">TEE插件管理</h1>
-          <Link href="/">
-            <a className="text-blue-500 hover:text-blue-700">返回首页</a>
+          <Link href="/" className="text-blue-500 hover:text-blue-700">
+            返回首页
           </Link>
         </div>
         
@@ -308,7 +308,7 @@ export default function Plugins() {
       </main>
 
       <footer className="text-center py-6 text-gray-600">
-        <p>COS72 - 社区操作系统 v0.1.0</p>
+        <p>COS72 - 社区操作系统 v0.2.6</p>
       </footer>
     </div>
   );

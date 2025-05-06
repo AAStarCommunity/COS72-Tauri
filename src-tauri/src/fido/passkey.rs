@@ -107,17 +107,25 @@ async fn sign_challenge_windows(challenge: &[u8]) -> Result<String, PasskeyError
 async fn sign_challenge_macos(challenge: &[u8]) -> Result<String, PasskeyError> {
     // 检查挑战是否为空
     if challenge.is_empty() {
+        println!("COS72-Tauri: Passkey错误 - 挑战为空");
         return Err(PasskeyError::Other("Challenge cannot be empty".to_string()));
     }
 
+    // 详细日志
+    println!("COS72-Tauri: 开始macOS TouchID签名流程");
+    println!("COS72-Tauri: 挑战字节长度: {}", challenge.len());
+    println!("COS72-Tauri: 挑战前16字节: {:?}", &challenge[..std::cmp::min(16, challenge.len())]);
+    
     // 在实际生产环境中，应使用LocalAuthentication框架和Secure Enclave
     // 通过foreign function interface (FFI) 调用Objective-C/Swift代码
     // 参考: https://developer.apple.com/documentation/localauthentication
     //
     // 以下是模拟实现：
-    println!("调用macOS TouchID API进行签名...");
+    println!("COS72-Tauri: 正在调用macOS TouchID API进行生物识别...");
+    println!("COS72-Tauri: (这里应该会弹出系统Touch ID提示框)");
     
     // 模拟Touch ID验证延迟
+    println!("COS72-Tauri: 等待用户验证...");
     tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
     
     // 生成模拟签名（实际实现应使用Secure Enclave生成真实签名）
@@ -125,7 +133,11 @@ async fn sign_challenge_macos(challenge: &[u8]) -> Result<String, PasskeyError> 
     signature.extend_from_slice(challenge);
     
     // 返回Base64编码的签名
-    Ok(general_purpose::STANDARD.encode(signature))
+    let result = general_purpose::STANDARD.encode(&signature);
+    println!("COS72-Tauri: TouchID签名成功，返回签名结果");
+    println!("COS72-Tauri: 签名长度: {}", result.len());
+    
+    Ok(result)
 }
 
 // Linux平台实现
