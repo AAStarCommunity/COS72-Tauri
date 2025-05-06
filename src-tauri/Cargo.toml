@@ -1,0 +1,32 @@
+[package]
+name = "cos72-tauri"
+version = "0.2.0"
+description = "Tauri based COS72 application framework"
+authors = ["COS72 Team"]
+license = ""
+repository = ""
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+tauri-build = { version = "1.4", features = [] }
+
+[dependencies]
+tauri = { version = "1.4", features = [ "shell-open", "dialog-all", "http-all", "fs-all", "os-all"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sysinfo = "0.29.8"
+sha2 = "0.10.7"
+hex = "0.4.3"
+reqwest = { version = "0.11.20", features = ["json", "stream"] }
+tokio = { version = "1.32.0", features = ["full"] }
+base64 = "0.21.3"
+
+[dev-dependencies]
+tempfile = "3.8.0"
+
+[features]
+# this feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"] 

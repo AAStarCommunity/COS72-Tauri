@@ -14,7 +14,7 @@ Tauri based COS72（Community Operation System 72） application framework, incl
    g.这个应用，内嵌了一些基础的功能，例如创建账户，账户管理，免gas转账，发布任务，积分购买商品等基础功能，大部分都基于web 页面，但每次交易需要指纹签名。
 请根据我提供的资料分析Tauri是否具备这个能力和潜力，其中的技术风险点，包括你的猜测和联想，建议。
 2. 如果具备这个能力，请给出一个解决方案文档，整理需求和方案，包括架构图（mermaid），整体流程图。
-3. 根据我的理解和AI的补充，根据方案，先完成一个Demo的设计规划：要求可以成为一个web网站，功能是获取外部服务器challenge，然后对challenge调用指纹进行签名，发送给外部server验证签名；同时具备基础的CPU检测功能，如果是ARM，则可以下载：https://github.com/apache/incubator-teaclave-trustzone-sdk/tree/main/projects/web3类似的代码，验证hash后可以重启后对外提供硬件钱包服务，例如新建钱包账户，交易签名，验证签名；demo可以发布应用到Mac，Windows，Android或者iOS，Linux；
+3. 根据我的理解和AI的补充，根据方案，先完成一个v0.1的设计规划：要求可以成为一个web网站，功能是获取外部服务器challenge，然后对challenge调用指纹进行签名，发送给外部server验证签名；同时具备基础的CPU检测功能，如果是ARM，则可以下载：https://github.com/apache/incubator-teaclave-trustzone-sdk/tree/main/projects/web3类似的代码，验证hash后可以重启后对外提供硬件钱包服务，例如新建钱包账户，交易签名，验证签名；demo可以发布应用到Mac，Windows，Android或者iOS，Linux；请根据我们的cursor rules，帮助我生成针对v0.1的features，plan和changes文档，我会检查后补充。
 
 
 From AI的历史分析:

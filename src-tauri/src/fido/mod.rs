@@ -1,0 +1,5 @@
+pub mod passkey;
+
+// 此模块提供FIDO2/WebAuthn相关功能，用于生物识别签名
+
+// 其他辅助或共享功能可在此添加 
