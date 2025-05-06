@@ -305,6 +305,8 @@ pnpm tauri:dev
 ```bash
 # 构建所有平台版本
 pnpm tauri:build
+
+可以运行 cargo fix --bin "cos72-tauri" 自动修复一部分警告。
 ```
 
 或按平台分别构建：
@@ -520,3 +522,138 @@ jobs:
 4. 创建 Git 标签并推送
 5. 等待自动构建完成或手动构建各平台版本
 6. 检查构建产物并发布 
+
+## COS72-Tauri v0.2.0 API调用范例
+
+以下是v0.2.0中添加的Tauri命令API的调用范例：
+
+### 获取硬件信息
+
+```javascript
+// 在前端JavaScript/TypeScript中调用
+import { invoke } from '@tauri-apps/api/tauri';
+
+// 获取完整硬件信息
+const hardwareInfo = await invoke('check_hardware');
+console.log('CPU信息:', hardwareInfo.cpu);
+console.log('内存:', hardwareInfo.memory, 'MB');
+console.log('TEE支持:', hardwareInfo.tee);
+
+// 仅获取CPU信息
+const cpuInfo = await invoke('get_cpu_info');
+console.log('CPU架构:', cpuInfo.architecture);
+console.log('型号:', cpuInfo.model_name);
+```
+
+### FIDO2生物识别签名
+
+```javascript
+// 使用生物识别对challenge进行签名
+const challenge = 'SGVsbG8sIHRoaXMgaXMgYSB0ZXN0IGNoYWxsZW5nZQ=='; // Base64编码的挑战
+try {
+  const signature = await invoke('get_challenge_signature', { challenge });
+  console.log('签名成功:', signature);
+} catch (error) {
+  console.error('签名失败:', error);
+}
+```
+
+### TEE功能调用
+
+```javascript
+// 获取TEE状态
+const teeStatus = await invoke('get_tee_status');
+console.log('TEE可用:', teeStatus.available);
+console.log('TEE类型:', teeStatus.type_name);
+
+// 初始化TEE
+if (teeStatus.available && !teeStatus.initialized) {
+  const initResult = await invoke('initialize_tee');
+  console.log('TEE初始化结果:', initResult);
+}
+
+// 创建钱包
+const createWalletResult = await invoke('perform_tee_operation', { 
+  operation: 'create_wallet',
+  params: null
+});
+console.log('钱包创建结果:', createWalletResult);
+
+// 签名交易
+const signResult = await invoke('perform_tee_operation', { 
+  operation: 'sign_transaction',
+  params: JSON.stringify({ tx_data: '0x1234...', nonce: 5 })
+});
+console.log('交易签名结果:', signResult);
+
+// 验证签名
+const verifyResult = await invoke('perform_tee_operation', { 
+  operation: 'verify_signature',
+  params: 'message,signature'
+});
+console.log('签名验证结果:', verifyResult);
+```
+
+### 插件管理
+
+```javascript
+// 下载TEE插件
+const downloadResult = await invoke('download_tee_plugin', { 
+  url: 'https://example.com/plugins/tee-wallet.zip',
+  target_path: 'plugins/tee-wallet.zip'
+});
+console.log('下载结果:', downloadResult);
+
+// 验证插件哈希
+const hashResult = await invoke('verify_plugin_hash', { 
+  file_path: 'plugins/tee-wallet.zip',
+  expected_hash: 'f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2'
+});
+console.log('哈希验证结果:', hashResult);
+```
+
+## v0.2.0 编译测试笔记
+
+在v0.2.0的编译测试中，我们遇到并解决了以下问题：
+
+1. **测试文件冲突**：通过更新next.config.js文件，排除测试文件（*.test.tsx）防止其被构建到生产环境。
+
+2. **TypeScript警告**：修复了React组件中的类型定义问题，特别是关于TeeStatus和HardwareInfo接口。
+
+3. **Rust编译错误**：
+   - 修复了临时值引用问题（特别是在detect_secure_enclave_support函数中）
+   - 创建了缺失的build.rs文件
+   - 解决了图标文件配置问题
+
+4. **Tauri构建配置**：
+   - 更新了所有版本号到v0.2.0，保持一致性
+   - 简化了图标配置，提高了跨平台构建兼容性
+
+5. **代码质量改进**：
+   - 修复了未使用的导入和变量警告
+   - 改进了错误处理和状态管理
+
+成功运行的测试和构建命令：
+
+```bash
+# 安装依赖
+pnpm install
+
+# 运行前端测试
+pnpm test
+
+# 构建前端
+pnpm build
+
+# 运行Rust编译检查
+cargo check
+
+# 运行Rust单元测试
+cargo test
+
+# 构建Rust应用
+cargo build
+
+# 运行完整应用（开发模式）
+pnpm tauri:dev
+``` 

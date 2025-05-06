@@ -29,6 +29,11 @@
 - 改进了TypeScript类型定义，增强了类型安全性
 - 优化了jest和webpack配置
 - 完善了deploy.md文档，添加了详细的先决条件和环境要求
+- 修复了macOS下检测Apple Silicon处理器的临时值引用问题
+- 添加了缺失的Tauri build.rs文件，修复了构建错误
+- 修复了未使用的导入和变量警告，提高了代码质量
+- 解决了图标文件配置问题，简化了图标配置
+- 更新了所有版本号到v0.2.0，保持一致性
 
 ### 已修改文件
 - CHANGES.md - 添加v0.2.0版本变更记录
@@ -36,9 +41,12 @@
 - deploy.md - 更新部署指南和API列表
 - package.json - 更新版本号
 - src-tauri/Cargo.toml - 更新版本号
+- src-tauri/tauri.conf.json - 更新版本号和图标配置
+- src-tauri/build.rs - 新建文件用于Tauri构建流程
+- src-tauri/src/hardware/detect.rs - 修复临时值引用问题
 - src-tauri/src/fido/passkey.rs - 增强FIDO2签名实现
-- src-tauri/src/tee/mod.rs - 添加TEE核心功能框架
-- src-tauri/src/main.rs - 新增TEE API和单元测试
+- src-tauri/src/tee/mod.rs - 添加TEE核心功能框架和修复警告
+- src-tauri/src/main.rs - 新增TEE API和单元测试，修复警告
 - src/pages/index.tsx - 更新UI以支持TEE功能
 
 ## [0.1.0] - 2023-11-01 (计划发布)
