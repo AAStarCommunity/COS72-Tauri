@@ -130,7 +130,7 @@ impl TeaclaveAdapter {
             });
             
             // Return cached directory
-            if let Some(dir) = &WALLET_DIR {
+            if let Some(dir) = WALLET_DIR.as_ref() {
                 Ok(dir.clone())
             } else {
                 // This shouldn't happen, but handle it anyway

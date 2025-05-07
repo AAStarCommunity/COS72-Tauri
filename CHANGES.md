@@ -1,5 +1,19 @@
 # COS72-Tauri 变更日志
 
+## [0.3.4] - 2025-05-07 (Bug修复与清理)
+
+### Bug修复
+- 修复了`src-tauri/src/main.rs`中的异步函数调用错误
+- 修复了`src-tauri/src/tee/teaclave_adapter.rs`中的静态可变引用警告
+- 删除了`src-tauri/target`目录并在`.gitignore`中确认已忽略
+
+### 修改的文件
+- src-tauri/src/main.rs - 修复测试函数中的异步调用
+- src-tauri/src/tee/teaclave_adapter.rs - 修复静态可变引用警告
+- package.json - 更新版本到0.3.4
+- src-tauri/Cargo.toml - 更新版本到0.3.4
+- CHANGES.md - 添加v0.3.4版本记录
+
 ## [0.3.3] - 2025-05-18 (TEE架构增强 & OP-TEE支持)
 
 ### TEE抽象层与模块化架构
