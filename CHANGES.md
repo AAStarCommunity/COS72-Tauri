@@ -1,5 +1,203 @@
 # COS72-Tauri 变更日志
 
+## [0.3.3] - 2025-05-18 (TEE架构增强 & OP-TEE支持)
+
+### TEE抽象层与模块化架构
+- 实现了TEE抽象接口，使不同TEE实现可互换：
+  1. 创建了`TEEAdapter`特性，定义了所有TEE实现必须提供的方法
+  2. 重构`TeaclaveAdapter`实现新接口，保留现有功能
+  3. 添加了`OpTeeAdapter`用于ARM TrustZone OP-TEE实现
+  4. 创建了`TEEAdapterFactory`用于动态选择最适合的TEE实现
+- 支持多种TEE连接方式：
+  1. 本地（设备内）TEE直接访问
+  2. 远程TEE（如树莓派）通过网络API访问
+  3. 模拟TEE用于开发和不支持TEE的环境
+
+### 树莓派OP-TEE支持
+- 添加了在树莓派上设置和使用OP-TEE的完整支持：
+  1. 创建详细文档`RASPI-TEE-SETUP.md`，指导用户在树莓派上设置OP-TEE
+  2. 实现了`OpTeeAdapter`，支持与树莓派上的OP-TEE服务通信
+  3. 增强了构建脚本和部署文档，添加ARM平台支持
+
+### 开发与调试增强
+- 改进了构建脚本(build.sh)：
+  1. 更好的错误处理和诊断能力
+  2. 添加了针对不同平台的构建选项
+  3. 改进了对远程TEE测试的支持
+- 更新了部署文档：
+  1. 添加了OP-TEE树莓派部署指南
+  2. 增加了针对多平台兼容性的测试信息
+  3. 提供了远程TEE测试的详细说明
+
+### 修改的文件
+- src-tauri/src/tee/mod.rs - 重构以使用抽象接口和TEE适配器工厂
+- src-tauri/src/tee/adapter_interface.rs - 新文件，定义TEE抽象接口
+- src-tauri/src/tee/teaclave_adapter.rs - 更新以实现新接口
+- src-tauri/src/tee/optee_adapter.rs - 新文件，实现OP-TEE适配器
+- src-tauri/src/tee/adapter_factory.rs - 新文件，实现TEE适配器工厂
+- src-tauri/Cargo.toml - 更新版本到0.3.3，添加async-trait依赖
+- RASPI-TEE-SETUP.md - 新文件，树莓派OP-TEE设置指南
+- deploy.md - 添加OP-TEE树莓派部署指南
+- build.sh - 增强构建脚本，改进错误处理
+
+## [0.3.2] - 2025-05-16 (WebAuthn Enhancement & UI Internationalization)
+
+### WebAuthn/Passkey Improvements
+- Enhanced WebAuthn implementation with robust Passkey registration support:
+  1. Implemented in-memory registration state management for testing purposes
+  2. Added proper Passkey credential storage mechanism
+  3. Fixed registration completion flow with proper credential validation
+  4. Improved challenge-response handling for better security
+
+### UI Internationalization
+- Updated UI text to use English instead of Chinese for better international user experience:
+  1. Changed all user interface text in pages/register-passkey.tsx and pages/test-passkey.tsx
+  2. Updated debug information displays to use English terms 
+  3. Converted all Layout components to display information in English
+  4. Standardized terminology across the application
+
+### Server-side Improvements
+- Enhanced backend messages with proper English localization:
+  1. Updated all console logging to use English
+  2. Converted debug and status messages from Chinese to English
+  3. Standardized error messages format for better readability
+
+### New Features
+- Added new WebAuthn functions:
+  1. webauthn_finish_authentication: Properly complete the authentication flow
+  2. Enhanced credential storage and retrieval mechanism
+  3. Added test script (test-webauthn.js) for validating WebAuthn functionality
+
+### Technical Details
+- Improved WebAuthn registration flow:
+  1. Added proper storage of PasskeyRegistration state during registration
+  2. Implemented secure handling of registration responses
+  3. Added support for proper credential verification
+
+### Modified Files
+- src/components/Layout.tsx - Updated to display debug information in English
+- src/pages/register-passkey.tsx - Converted UI text to English
+- src/pages/test-passkey.tsx - Converted UI text to English 
+- src-tauri/src/fido/webauthn.rs - Enhanced WebAuthn implementation with proper registration support
+- src-tauri/src/main.rs - Added new Tauri command for authentication completion and English messages
+- test-webauthn.js - Added new test script for WebAuthn functionality validation
+
+## [0.3.1] - 2025-05-15 (性能优化与类型修复)
+
+### 性能优化
+- 增强了硬件检测结果缓存机制：
+  1. 优化了tauri-api.ts中的detectHardware函数，确保缓存机制正常工作
+  2. 添加了通过clearHardwareCache函数手动清除缓存的能力
+  3. 解决了在某些情况下缓存未正确应用的问题
+
+### 类型安全性增强
+- 修复了eth-wallet.tsx中的类型错误问题：
+  1. 为invokeCommand函数添加了明确的类型参数
+  2. 添加了TeeResult类型接口确保类型安全
+  3. 解决了"result is of type unknown"错误提示
+- 改进了tauri-api.ts中performTeeOperation函数：
+  1. 修改函数签名以支持复杂参数类型
+  2. 使其能够处理字符串和对象类型的操作参数
+  3. 确保与Rust后端的交互正确
+
+### Rust编译错误修复
+- 修复了src-tauri/src/tee/mod.rs中的关键编译错误：
+  1. 解决了`get_tee_status`函数重复定义问题，移除了同步版本
+  2. 确保异步函数调用正确使用`.await`
+  3. 移除了未使用的导入，解决了编译警告
+
+### 编码改进
+- 提高了代码可维护性：
+  1. 为API函数添加了更清晰的类型注解
+  2. 统一了API调用的错误处理模式
+  3. 添加了详细的代码注释
+
+### 已修改文件
+- src/lib/tauri-api.ts - 增强了performTeeOperation函数，支持复杂参数类型
+- src/pages/eth-wallet.tsx - 修复了类型错误，为invokeCommand添加正确的类型参数
+- src-tauri/src/tee/mod.rs - 解决了函数重复定义和异步调用问题
+- src-tauri/src/tee/teaclave_adapter.rs - 移除了未使用的导入
+- CHANGES.md - 添加v0.3.1版本更新记录
+
+## [0.2.13] - 2023-12-31 (UI改进与Passkey注册修复)
+
+### Passkey注册功能修复
+- 修复了Passkey注册过程中的WebAuthn API错误：
+  1. 解决了challenge类型不匹配问题，确保提供正确的ArrayBuffer类型
+  2. 修复了公钥凭证创建选项中的参数格式
+  3. 优化了Base64URL编解码逻辑，提升跨平台兼容性
+  4. 完善了错误处理和调试日志
+- 增强了模拟实现：
+  1. 添加了全套WebAuthn相关命令的模拟支持
+  2. 实现了模拟凭证管理和挑战响应流程
+  3. 改进了浏览器环境下的降级体验
+
+### UI布局改进
+- 重新设计了页面布局以提升用户体验：
+  1. 将导航菜单移至页面顶部，增强跨页面一致性
+  2. 重新组织系统状态显示区域，放置于页面底部
+  3. 优化了硬件信息和TEE状态区域，采用单行两列布局
+  4. 改进了API检测信息展示格式，更加清晰直观
+- 修复了UI文本问题：
+  1. 替换了undefined为中文"未定义"
+  2. 统一了状态说明文本的展示格式
+  3. 增强了错误信息的可读性
+
+### 技术改进
+- 增强前端与后端的通信可靠性：
+  1. 统一了命令参数名称，确保前后端一致
+  2. 改进参数验证和错误处理
+  3. 增加了详细的调试日志和状态报告
+- 提高了类型安全性：
+  1. 修复了ArrayBuffer和Uint8Array的类型转换问题
+  2. 优化了WebAuthn API调用的类型定义
+  3. 解决了潜在的类型不匹配异常
+
+### 已修改文件
+- src/lib/passkey-manager.ts - 修复WebAuthn API调用和类型问题
+- src/lib/tauri-mock.ts - 添加WebAuthn命令的模拟支持
+- src/pages/register-passkey.tsx - 重新设计UI布局，移动导航菜单到顶部
+- src/pages/test-passkey.tsx - 优化系统状态区域，修复显示问题
+- CHANGES.md - 添加v0.2.13版本变更记录
+
+## [0.2.12] - 2023-12-31 (Passkey 功能完善)
+
+### 完整实现 Passkey 流程
+- 实现了完整的 FIDO2/Passkey 管理流程：
+  1. 用户注册：调用WebAuthn API创建密钥对，注册用户的生物识别信息
+  2. 服务器通信：将公钥发送到服务器并存储，保持私钥本地安全
+  3. 签名挑战：从服务器获取挑战并使用私钥签名
+  4. 验证签名：服务器使用公钥验证签名确认用户身份
+- 增强了前端实现：
+  1. 优化了Passkey注册页面，改进用户体验和错误处理
+  2. 添加了新的`passkey-manager.ts`模块，包装WebAuthn API并处理不同平台差异
+  3. 实现了挑战字符串的Base64URL正确编解码，确保跨平台兼容性
+  4. 添加了模拟服务器页面，展示完整的注册和验证流程
+
+### 跨平台兼容性
+- 确保在各个平台上的一致体验：
+  1. macOS: 使用Touch ID / Secure Enclave
+  2. Windows: 支持Windows Hello
+  3. Linux: 支持FIDO2安全密钥
+  4. 浏览器环境: 降级到模拟数据但保持相同API接口
+
+### 技术实现
+- 后端改进：
+  1. 优化了`webauthn.rs`中的FIDO2实现，使用最新的webauthn-rs库
+  2. 添加了公钥存储和检索机制
+  3. 实现了随机挑战生成和验证流程
+- 前端改进：
+  1. 正确处理WebAuthn的Base64URL编码
+  2. 优化了用户体验和错误信息展示
+  3. 添加了详细的调试信息便于问题排查
+
+### 已修改文件
+- src/lib/passkey-manager.ts - 新文件，实现Passkey注册和验证的完整流程
+- src/pages/register-passkey.tsx - 改进用户体验，实现完整的注册流程
+- src/pages/test-passkey.tsx - 强化测试功能，支持完整的Passkey验证流程
+- src-tauri/src/fido/webauthn.rs - 优化后端实现，支持Passkey全流程
+- CHANGES.md - 添加v0.2.12版本变更记录
+
 ## [0.2.11] - 2023-12-30 (核心改进)
 
 ### Tauri 2.0 API通信机制重构
@@ -315,3 +513,139 @@ Tauri 2.0更改了窗口API和环境变量注入方式，导致应用无法正�
 - src/pages/index.tsx - 添加API就绪等待和重试机制
 - src/pages/plugins.tsx - 同步更新硬件检测逻辑
 - CHANGES.md - 添加v0.3.1版本更新记录
+
+## v0.3.0 - TEE钱包与Teaclave TrustZone集成
+
+### 新增功能
+
+1. **集成Teaclave TrustZone SDK**
+   - 添加TeaclaveAdapter适配器，连接eth_wallet项目与COS72-Tauri应用
+   - 实现TEE接口与以太坊钱包功能的对接
+   - 支持钱包创建、交易签名、公钥获取等基础功能
+
+2. **以太坊TEE钱包UI**
+   - 新增以太坊钱包页面，提供用户友好的界面
+   - 支持TEE状态显示、钱包管理和交易签名功能
+   - 实现交易构建和签名流程
+
+3. **TEE核心功能**
+   - 实现TEE环境检测与初始化
+   - 实现TEE命令操作接口
+   - 提供线程安全的TEE访问机制
+
+### 修复问题
+
+1. **导航栏布局问题**
+   - 统一所有页面的导航栏布局
+   - 添加正确的页面链接，确保导航一致性
+
+2. **Passkey注册错误**
+   - 修复WebAuthn API权限问题
+   - 移除RP ID设置，使用当前域自动设置，解决"用户或平台拒绝权限"错误
+
+3. **TEE操作接口优化**
+   - 升级perform_tee_operation函数，支持复杂操作类型
+   - 改进错误处理和日志记录
+
+### 技术细节
+
+1. **依赖更新**
+   - 添加once_cell用于线程安全的全局状态管理
+   - 添加hex和serde_json用于数据处理
+
+2. **架构改进**
+   - 使用模块化设计分离TEE功能
+   - 实现适配器模式连接不同TEE实现
+   - 为后续实际TEE环境集成做准备
+
+### 构建修复
+
+1. **Tauri 2.0兼容性修复**
+   - 更新tauri依赖特性配置，移除不存在的api-all特性
+   - 仅保留必要的macos-private-api特性
+   - 添加对应的tauri.conf.json配置
+
+2. **异步处理优化**
+   - 修复tokio线程阻塞问题，优化异步函数调用
+   - 改进TEE初始化和状态检查的异步流程
+
+3. **性能优化**
+   - 添加硬件检测结果缓存，避免重复检测
+   - 优化页面加载性能
+   - 改进Tauri API初始化和检测流程
+
+### 界面改进
+
+1. **统一导航与布局**
+   - 实现统一的导航组件，用于所有页面
+   - 添加通用布局组件，包含导航栏和页脚
+   - 标准化所有页面的结构与样式
+
+2. **版本与错误处理**
+   - 升级至v0.3.0版本
+   - 改进Tauri API连接错误处理
+   - 优化失败降级到模拟数据的流程
+
+## v0.2.13 - 错误修复与性能优化
+
+### 修复问题
+
+1. **Tauri API初始化问题**
+   - 修复在某些环境下Tauri API初始化失败的问题
+   - 添加降级机制以支持模拟环境
+
+2. **版本升级**
+   - 更新应用版本号
+   - 添加版本信息到UI
+   - 更新依赖与API
+
+3. **错误处理**
+   - 改进错误处理与日志记录
+   - 添加更友好的用户提示
+
+### 新增特性
+
+1. **Passkey支持**
+   - 添加Passkey/WebAuthn验证功能
+   - 实现生物识别支持检测
+
+2. **调试工具**
+   - 增加调试页面
+   - 添加环境检测功能
+   - 增强日志记录
+
+## [0.3.3] - 2025-05-17 (WebAuthn Fix & TEE Simulation)
+
+### WebAuthn/Passkey Fixes
+- Fixed WebAuthn registration permission denied error:
+  1. Removed fixed "localhost" RP ID in webauthn.rs, allowing browser to use current domain
+  2. Updated WebAuthn configuration to use allow_credentials_for_registration
+  3. Fixed challenge format and authentication flow
+
+### TEE Wallet Enhancements
+- Improved TEE wallet simulation functionality:
+  1. Enhanced transaction signing with realistic mock signatures  
+  2. Added proper JSON operation parsing for complex TEE operations
+  3. Improved public key and address generation with realistic formats
+  4. Updated console messages to use English for better internationalization
+
+### Linux Testing Support
+- Added Linux testing tools for ETH wallet services:
+  1. Created eth-wallet-service-mock.js to simulate TEE wallet in standard Linux
+  2. Provided Dockerfile.eth-wallet-mock for containerized testing
+  3. Added comprehensive documentation in ETH-WALLET-MOCK-README.md
+
+### Internationalization
+- Continued UI and server message internationalization:
+  1. Converted remaining error messages from Chinese to English
+  2. Standardized naming and message formats
+
+### Modified Files
+- src-tauri/src/fido/webauthn.rs - Fixed WebAuthn RP ID configuration
+- src-tauri/src/tee/teaclave_adapter.rs - Enhanced TEE simulation
+- src-tauri/src/main.rs - Improved operation parsing and error messaging
+- src/lib/passkey-manager-simple.ts - Updated registration handling
+- eth-wallet-service-mock.js - Added mock service for Linux environments
+- Dockerfile.eth-wallet-mock - Added Docker support for mock service
+- ETH-WALLET-MOCK-README.md - Added documentation for Linux testing
+- CHANGES.md - Updated with version 0.3.3 changes

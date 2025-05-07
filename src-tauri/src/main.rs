@@ -33,14 +33,15 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             detect_hardware,
             verify_passkey,
-            perform_tee_operation,
             get_tee_status,
+            perform_tee_operation,
             initialize_tee,
             webauthn_supported,
             webauthn_biometric_supported,
             webauthn_start_registration,
             webauthn_finish_registration,
-            webauthn_get_credentials
+            webauthn_get_credentials,
+            webauthn_finish_authentication
         ])
         // 应用初始化事件处理
         .setup(|app| {
@@ -66,7 +67,7 @@ fn main() {
                 
                 // 监听DOM就绪事件
                 let window_clone = window.clone();
-                let _ = window.listen("tauri://dom-ready", move |_| {
+                window.listen("tauri://dom-ready", move |_event| {
                     println!("COS72-Tauri: DOM就绪事件触发");
                     
                     // 发送DOM就绪事件到前端
@@ -126,63 +127,63 @@ async fn detect_hardware() -> Result<Value, String> {
 #[tauri::command]
 async fn verify_passkey(challenge: String) -> Result<Value, String> {
     println!("===================================================");
-    println!("COS72-Tauri: FIDO2/Passkey验证请求已接收");
-    println!("COS72-Tauri: 挑战长度: {} 字符", challenge.len());
+    println!("COS72-Tauri: FIDO2/Passkey verification request received");
+    println!("COS72-Tauri: Challenge length: {} characters", challenge.len());
     if !challenge.is_empty() {
         let preview: String = challenge.chars().take(16).collect();
-        println!("COS72-Tauri: 挑战前16字符: {}", preview);
+        println!("COS72-Tauri: First 16 characters of challenge: {}", preview);
     }
     
-    // 检查挑战是否为空
+    // Check if challenge is empty
     if challenge.trim().is_empty() {
-        println!("COS72-Tauri: 错误 - 挑战为空");
-        return Err("挑战不能为空".to_string());
+        println!("COS72-Tauri: Error - Challenge is empty");
+        return Err("Challenge cannot be empty".to_string());
     }
     
-    // 检查操作系统
-    println!("COS72-Tauri: 当前操作系统: {}", std::env::consts::OS);
-    println!("COS72-Tauri: 当前架构: {}", std::env::consts::ARCH);
+    // Check OS
+    println!("COS72-Tauri: Current OS: {}", std::env::consts::OS);
+    println!("COS72-Tauri: Current architecture: {}", std::env::consts::ARCH);
     
-    // 检查macOS上的权限
+    // Check permissions on macOS
     if std::env::consts::OS == "macos" {
-        println!("COS72-Tauri: macOS上的WebAuthn支持: {}", webauthn::is_webauthn_supported());
-        println!("COS72-Tauri: macOS上的生物识别支持: {}", webauthn::is_biometric_supported());
+        println!("COS72-Tauri: WebAuthn support on macOS: {}", webauthn::is_webauthn_supported());
+        println!("COS72-Tauri: Biometric support on macOS: {}", webauthn::is_biometric_supported());
     }
     
-    // 显示接下来要调用的函数
-    println!("COS72-Tauri: 准备调用webauthn::verify_challenge函数...");
+    // Show next function to be called
+    println!("COS72-Tauri: Preparing to call webauthn::verify_challenge function...");
     
-    // 使用新的WebAuthn实现 
+    // Use new WebAuthn implementation
     match webauthn::verify_challenge(&challenge).await {
         Ok(signature) => {
-            println!("COS72-Tauri: FIDO2验证成功!");
-            println!("COS72-Tauri: 签名结果长度: {}", signature.len());
+            println!("COS72-Tauri: FIDO2 verification successful!");
+            println!("COS72-Tauri: Signature result length: {}", signature.len());
             let preview: String = signature.chars().take(32).collect();
-            println!("COS72-Tauri: 签名结果前32字符: {}", preview);
+            println!("COS72-Tauri: First 32 characters of signature: {}", preview);
             
-            // 将结果转换为 JSON Value
+            // Convert result to JSON Value
             let json_result = serde_json::json!({
                 "success": true,
                 "signature": signature,
                 "platform": std::env::consts::OS,
                 "timestamp": chrono::Utc::now().to_rfc3339()
             });
-            println!("COS72-Tauri: 返回JSON结果: {}", json_result);
+            println!("COS72-Tauri: Returning JSON result: {}", json_result);
             println!("===================================================");
             Ok(json_result)
         },
         Err(e) => {
-            println!("COS72-Tauri: FIDO2验证失败: {}", e);
-            // 返回更详细的错误信息
+            println!("COS72-Tauri: FIDO2 verification failed: {}", e);
+            // Return detailed error information
             let error_json = serde_json::json!({
                 "success": false,
                 "error": e.to_string(),
                 "platform": std::env::consts::OS,
                 "timestamp": chrono::Utc::now().to_rfc3339()
             });
-            println!("COS72-Tauri: 返回错误JSON: {}", error_json);
+            println!("COS72-Tauri: Returning error JSON: {}", error_json);
             println!("===================================================");
-            Err(format!("FIDO2验证失败: {}", e))
+            Err(format!("FIDO2 verification failed: {}", e))
         }
     }
 }
@@ -192,7 +193,7 @@ async fn verify_passkey(challenge: String) -> Result<Value, String> {
 async fn get_tee_status() -> Result<tee::TeeStatus, String> {
     println!("COS72-Tauri: 正在获取TEE状态...");
     
-    match tee::get_tee_status() {
+    match tee::get_tee_status().await {
         Ok(status) => {
             println!("COS72-Tauri: TEE状态获取成功: {:?}", status);
             Ok(status)
@@ -207,68 +208,114 @@ async fn get_tee_status() -> Result<tee::TeeStatus, String> {
 // TEE操作函数
 #[tauri::command]
 async fn perform_tee_operation(operation: String) -> Result<TeeResult, String> {
-    println!("COS72-Tauri: 正在执行TEE操作: {}", operation);
+    println!("COS72-Tauri: Executing TEE operation: {}", operation);
     
-    // 解析操作类型
+    // Parse operation type
     let op = match operation.as_str() {
         "CreateWallet" => TeeOperation::CreateWallet,
         "GetPublicKey" => TeeOperation::GetPublicKey,
-        _ => return Err(format!("未知的TEE操作: {}", operation))
+        "ExportWallet" => TeeOperation::ExportWallet(false),
+        "ExportWalletWithPrivate" => TeeOperation::ExportWallet(true),
+        "ImportWallet" => TeeOperation::ImportWallet(String::new()),
+        _ => {
+            // Check if it's a JSON operation with parameters
+            if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&operation) {
+                if let Some(op_type) = json_value.get("type").and_then(|v| v.as_str()) {
+                    match op_type {
+                        "SignTransaction" => {
+                            if let Some(tx_data) = json_value.get("txData").and_then(|v| v.as_str()) {
+                                TeeOperation::SignTransaction(tx_data.to_string())
+                            } else {
+                                return Err("Missing txData for SignTransaction operation".to_string());
+                            }
+                        },
+                        "VerifySignature" => {
+                            let message = json_value.get("message").and_then(|v| v.as_str())
+                                .ok_or_else(|| "Missing message for VerifySignature".to_string())?;
+                            let signature = json_value.get("signature").and_then(|v| v.as_str())
+                                .ok_or_else(|| "Missing signature for VerifySignature".to_string())?;
+                            TeeOperation::VerifySignature(message.to_string(), signature.to_string())
+                        },
+                        "ImportWallet" => {
+                            let wallet_data = json_value.get("walletData").and_then(|v| v.as_str())
+                                .ok_or_else(|| "Missing walletData for ImportWallet".to_string())?;
+                            TeeOperation::ImportWallet(wallet_data.to_string())
+                        },
+                        _ => return Err(format!("Unknown TEE operation type: {}", op_type))
+                    }
+                } else {
+                    return Err("Invalid operation format: missing type field".to_string());
+                }
+            } else {
+                return Err(format!("Unknown TEE operation: {}", operation));
+            }
+        }
     };
     
-    // 检查TEE环境是否可用
-    let tee_status = tee::get_tee_status().map_err(|e| e.to_string())?;
+    // Check if TEE environment is available
+    let tee_status = tee::get_tee_status().await.map_err(|e| e.to_string())?;
     
     if tee_status.available {
-        println!("COS72-Tauri: TEE环境可用，执行操作");
+        println!("COS72-Tauri: TEE environment available, executing operation");
         match tee::perform_tee_operation(op).await {
             Ok(result) => {
-                println!("COS72-Tauri: TEE操作成功");
+                println!("COS72-Tauri: TEE operation successful");
                 Ok(result)
             },
             Err(e) => {
-                println!("COS72-Tauri: TEE操作失败: {:?}", e);
-                Err(format!("TEE操作失败: {:?}", e))
+                println!("COS72-Tauri: TEE operation failed: {:?}", e);
+                Err(e.to_string())
             }
         }
     } else {
-        println!("COS72-Tauri: TEE环境不可用");
-        Err("TEE环境不可用".to_string())
+        println!("COS72-Tauri: TEE environment not available");
+        Err("TEE environment not available, cannot execute operation".to_string())
     }
 }
 
 // 检查是否支持WebAuthn
 #[tauri::command]
 fn webauthn_supported() -> bool {
-    println!("COS72-Tauri: 检查WebAuthn支持");
-    webauthn::is_webauthn_supported()
+    println!("COS72-Tauri: Checking WebAuthn support status");
+    let result = webauthn::is_webauthn_supported();
+    println!("COS72-Tauri: WebAuthn support status: {}", result);
+    result
 }
 
 // 检查是否支持生物识别
 #[tauri::command]
 fn webauthn_biometric_supported() -> bool {
-    println!("COS72-Tauri: 检查生物识别支持");
-    webauthn::is_biometric_supported()
+    println!("COS72-Tauri: Checking biometric support status");
+    let result = webauthn::is_biometric_supported();
+    println!("COS72-Tauri: Biometric support status: {}", result);
+    result
 }
 
 // 开始注册流程
 #[tauri::command]
 async fn webauthn_start_registration(username: String) -> Result<Value, String> {
-    println!("COS72-Tauri: 开始WebAuthn注册，用户名: {}", username);
+    println!("COS72-Tauri: Starting Passkey registration process, username: {}", username);
     webauthn::start_registration(&username)
 }
 
 // 完成注册流程
 #[tauri::command]
 async fn webauthn_finish_registration(user_id: String, response: String) -> Result<Value, String> {
-    println!("COS72-Tauri: 完成WebAuthn注册，用户ID: {}", user_id);
+    println!("COS72-Tauri: Completing Passkey registration process, user ID: {}", user_id);
     webauthn::finish_registration(&user_id, &response)
+}
+
+// 完成认证流程
+#[tauri::command]
+async fn webauthn_finish_authentication(response: String) -> Result<Value, String> {
+    println!("COS72-Tauri: Completing Passkey authentication process");
+    webauthn::finish_authentication(&response)
 }
 
 // 获取用户凭证
 #[tauri::command]
 async fn webauthn_get_credentials(user_id: String) -> Result<Value, String> {
-    println!("COS72-Tauri: 获取凭证，用户ID: {}", user_id);
+    println!("COS72-Tauri: Getting user Passkey credentials, user ID: {}", user_id);
     webauthn::get_credentials(&user_id)
 }
 
@@ -279,7 +326,7 @@ async fn initialize_tee() -> Result<bool, String> {
     
     match tee::initialize_tee().await {
         Ok(result) => {
-            println!("COS72-Tauri: TEE初始化成功: {}", result);
+            println!("COS72-Tauri: TEE初始化结果: {}", result);
             Ok(result)
         },
         Err(e) => {

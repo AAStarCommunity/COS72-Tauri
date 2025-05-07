@@ -769,3 +769,278 @@ pnpm tauri build --target linux-x86_64    # Linux
 - macOS: `src-tauri/target/release/bundle/macos/COS72.app`
 - Windows: `src-tauri/target/release/bundle/msi/COS72_x.x.x_x64.msi`
 - Linux: `src-tauri/target/release/bundle/deb/cos72-tauri_x.x.x_amd64.deb` 
+
+## OP-TEE 树莓派部署指南 (v0.3.3新增)
+
+在v0.3.3版本中，我们添加了对基于ARM TrustZone的OP-TEE实现的支持，这是一个完整的TEE解决方案，特别适用于树莓派等ARM设备。以下是在树莓派上设置和配置OP-TEE环境的详细步骤。
+
+### 硬件要求
+
+- 树莓派4B (推荐4GB+ RAM)
+- 32GB+ microSD卡
+- 电源适配器 (推荐3A)
+- 可选: 带散热的外壳
+
+### 软件设置
+
+#### 1. 基础系统安装
+
+```bash
+# 下载Ubuntu Server 22.04 LTS for Raspberry Pi
+wget https://cdimage.ubuntu.com/releases/22.04/release/ubuntu-22.04-preinstalled-server-arm64+raspi.img.xz
+
+# 写入SD卡 (替换sdX为你的SD卡设备)
+xzcat ubuntu-22.04-preinstalled-server-arm64+raspi.img.xz | sudo dd of=/dev/sdX bs=4M status=progress
+```
+
+启动树莓派并完成初始设置。
+
+#### 2. 安装OP-TEE
+
+OP-TEE为ARM平台提供了基于TrustZone的TEE实现。
+
+```bash
+# 安装依赖
+sudo apt update
+sudo apt install -y git python3-pip wget curl build-essential python3-dev python3-pycryptodome python3-pyelftools repo
+
+# 克隆OP-TEE仓库
+mkdir -p ~/tee
+cd ~/tee
+repo init -u https://github.com/OP-TEE/manifest.git -m rpi4.xml
+repo sync -j4
+
+# 构建OP-TEE
+cd build
+make toolchains
+make all
+
+# 烧写构建的镜像
+sudo dd if=out/boot.img of=/dev/mmcblk0p1 bs=4M
+sudo dd if=out/rootfs.img of=/dev/mmcblk0p2 bs=4M
+```
+
+重启树莓派。现在你已经有了运行OP-TEE的系统。
+
+#### 3. 构建以太坊钱包可信应用(TA)
+
+```bash
+# 克隆ETH钱包TA仓库
+git clone https://github.com/cos72/eth-wallet-ta.git
+cd eth-wallet-ta
+
+# 构建TA
+make CROSS_COMPILE=aarch64-linux-gnu- TA_DEV_KIT_DIR=~/tee/optee_os/out/arm/export-ta_arm64
+```
+
+这会构建一个可以在安全世界中运行的可信应用程序。
+
+#### 4. 构建ETH钱包服务
+
+```bash
+# 克隆ETH钱包服务仓库
+git clone https://github.com/cos72/eth-wallet-service.git
+cd eth-wallet-service
+
+# 安装Node.js依赖
+sudo apt install -y nodejs npm
+npm install
+
+# 配置服务使用TA
+cp config.example.js config.js
+# 编辑config.js指向TA位置
+```
+
+### 与COS72-Tauri集成
+
+#### 1. 设置REST API服务器
+
+```bash
+# 启动ETH钱包服务
+cd ~/eth-wallet-service
+npm start
+```
+
+服务默认将在端口3030上启动。
+
+#### 2. 配置COS72-Tauri使用远程TEE
+
+编辑你的COS72-Tauri配置指向树莓派：
+
+```bash
+# 在.env或配置文件中
+ETH_WALLET_SERVICE=http://<raspberry-pi-ip>:3030
+USE_REMOTE_TEE=true
+```
+
+或者使用Tauri命令行选项：
+
+```bash
+# 使用命令行参数
+pnpm tauri dev -- --tee-type optee --tee-remote http://<raspberry-pi-ip>:3030
+```
+
+#### 3. 使用程序界面配置
+
+从v0.3.3版本开始，我们还添加了通过应用程序界面配置TEE的功能：
+
+1. 启动COS72-Tauri应用程序
+2. 导航到"设置"页面
+3. 在"TEE配置"部分选择"OP-TEE"作为TEE类型
+4. 选择"远程"作为连接模式
+5. 输入远程服务器地址(例如 `http://<raspberry-pi-ip>:3030`)
+6. 点击"应用"按钮
+
+应用程序将自动尝试连接到远程TEE并显示连接状态。
+
+### 安全增强
+
+#### 1. 安全通信
+
+要保护COS72-Tauri和树莓派之间的通信：
+
+```bash
+# 生成自签名证书
+cd ~/eth-wallet-service
+mkdir -p certs
+openssl req -x509 -newkey rsa:4096 -keyout certs/key.pem -out certs/cert.pem -days 365 -nodes
+
+# 在服务中配置HTTPS
+# 编辑config.js启用HTTPS
+```
+
+更新你的COS72-Tauri配置使用HTTPS：
+
+```
+ETH_WALLET_SERVICE=https://<raspberry-pi-ip>:3030
+```
+
+#### 2. 网络隔离
+
+为了最大安全，考虑：
+
+1. 为树莓派设置专用VLAN
+2. 使用USB-to-Ethernet适配器进行物理网络隔离
+3. 实现防火墙规则限制对TEE服务的访问
+
+### TEE中的密钥管理
+
+OP-TEE环境提供了几个安全功能：
+
+1. **安全存储**：由TrustZone支持的加密存储
+2. **硬件密钥派生**：从硬件特定值派生的密钥
+3. **安全内存**：正常世界无法访问的内存
+
+在我们的TA中，我们实现：
+
+```c
+// 在安全世界中生成密钥的示例
+TEE_Result generate_wallet(uint32_t param_types, TEE_Param params[4]) {
+    // 在TEE中生成随机种子
+    uint8_t seed[32];
+    TEE_GenerateRandom(seed, sizeof(seed));
+    
+    // 派生以太坊密钥
+    derive_ethereum_keys(seed, &private_key, &public_key, &address);
+    
+    // 在安全存储中存储密钥
+    TEE_ObjectHandle object;
+    TEE_CreatePersistentObject(TEE_STORAGE_PRIVATE, wallet_id, wallet_id_len,
+                              TEE_DATA_FLAG_ACCESS_WRITE, NULL, 
+                              private_key, private_key_len, &object);
+    
+    // 返回公开信息给正常世界
+    memcpy(params[0].memref.buffer, public_key, public_key_len);
+    memcpy(params[1].memref.buffer, address, address_len);
+    
+    return TEE_SUCCESS;
+}
+```
+
+### 性能考虑
+
+TrustZone操作比常规执行慢。设计你的应用程序以：
+
+1. 最小化安全和正常世界之间的切换
+2. 尽可能批处理操作
+3. 使用异步模式避免阻塞UI
+
+### 故障排除
+
+#### 常见问题
+
+1. **TA加载失败**：检查你的主机应用程序中的UUID是否与TA的UUID匹配
+2. **通信错误**：验证网络连接和防火墙设置
+3. **性能缓慢**：考虑优化在TEE中执行的操作
+
+#### 日志和调试
+
+启用TEE日志：
+
+```bash
+# 在树莓派上
+sudo tee-supplicant -d 
+sudo modprobe optee_armtz
+```
+
+查看日志：
+
+```bash
+dmesg | grep -i tee
+```
+
+## v0.3.3 多平台兼容性测试
+
+我们已经在以下平台上测试了v0.3.3版本：
+
+1. **macOS**：
+   - macOS Ventura 13.4+ (Intel和Apple Silicon)
+   - 兼容性：完全支持所有功能
+   - TEE模式：模拟模式
+
+2. **Windows**：
+   - Windows 10/11 最新更新
+   - 兼容性：完全支持所有功能
+   - TEE模式：模拟模式
+
+3. **Linux**：
+   - Ubuntu 22.04 LTS
+   - 兼容性：完全支持所有功能
+   - TEE模式：
+     - x86_64：模拟模式
+     - ARM64：如果有OP-TEE，则为本地模式；否则为远程/模拟模式
+
+4. **树莓派**：
+   - 树莓派4B (4GB+) 运行Ubuntu 22.04
+   - 兼容性：作为远程TEE服务完全支持
+   - TEE模式：本地OP-TEE
+
+### 在多个平台上构建
+
+```bash
+# 所有平台通用构建步骤
+pnpm install
+pnpm build
+
+# 针对特定平台构建
+pnpm tauri build --target windows  # Windows
+pnpm tauri build --target macos    # macOS
+pnpm tauri build --target linux    # Linux
+
+# 构建ARM64版本（如树莓派）
+pnpm tauri build --target linux-arm64
+```
+
+### 测试远程TEE连接
+
+要测试与远程TEE的连接，请运行：
+
+```bash
+# 启动模拟TEE服务
+node eth-wallet-service-mock.js
+
+# 在另一个终端运行应用程序
+pnpm tauri dev -- --tee-type optee --tee-remote http://localhost:3030
+```
+
+这将启动应用程序并连接到模拟的远程TEE服务。 

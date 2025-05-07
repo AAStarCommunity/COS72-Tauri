@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use super::super::detect;
-    use super::super::{CpuInfo, HardwareInfo, TeeSupport};
+    
 
     #[test]
     fn test_get_hardware_info() {

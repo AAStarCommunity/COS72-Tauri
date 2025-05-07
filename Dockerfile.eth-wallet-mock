@@ -1,0 +1,19 @@
+FROM node:18-slim
+
+WORKDIR /app
+
+# Copy package files and install dependencies
+COPY package*.json ./
+RUN npm install express cors crypto uuid
+
+# Copy application files
+COPY eth-wallet-service-mock.js ./
+
+# Create volume mount point for data persistence
+VOLUME /app/.eth-wallet-mock
+
+# Expose the service port
+EXPOSE 3030
+
+# Run the service
+CMD ["node", "eth-wallet-service-mock.js"] 

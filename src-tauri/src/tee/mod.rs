@@ -1,22 +1,48 @@
-// 此模块提供TEE相关接口和实现
-// v0.2.0增强了实际功能实现
+// TEE Module
+// Provides TEE-related interfaces and implementations
+// v0.3.3 - Added OP-TEE adapter and interface abstraction
 
 use serde::{Serialize, Deserialize};
 use std::io::Error as IoError;
 use std::fmt;
+use tokio::sync::Mutex;
+use once_cell::sync::Lazy;
+use std::sync::Arc;
 
-// TEE操作类型
+// Submodules
+mod adapter_interface;
+mod teaclave_adapter;
+mod optee_adapter;
+mod adapter_factory;
+
+// Re-export key components
+pub use adapter_interface::{TEEAdapter, TEEConnectionType};
+pub use adapter_factory::{TEEAdapterFactory, TEEType};
+
+// Global adapter instance, using Mutex for thread safety
+static TEE_ADAPTER: Lazy<Arc<Mutex<Box<dyn TEEAdapter>>>> = Lazy::new(|| {
+    TEEAdapterFactory::create_best_adapter().unwrap_or_else(|_| {
+        // Fallback to Teaclave in simulation mode
+        let adapter = TEEAdapterFactory::create_adapter(
+            TEEType::Teaclave, 
+            Some(TEEConnectionType::Simulated)
+        );
+        Arc::new(Mutex::new(adapter))
+    })
+});
+
+// TEE operation types
 #[derive(Debug, Serialize, Deserialize)]
 pub enum TeeOperation {
-    CreateWallet,                      // 创建新钱包
-    SignTransaction(String),           // 签名交易，参数为交易数据
-    VerifySignature(String, String),   // 验证签名，参数为消息和签名
-    GetPublicKey,                      // 获取公钥
-    ExportWallet(bool),                // 导出钱包（布尔参数表示是否导出私钥）
-    ImportWallet(String),              // 导入钱包，参数为钱包数据
+    CreateWallet,                      // Create new wallet
+    SignTransaction(String),           // Sign transaction, parameter is transaction data
+    VerifySignature(String, String),   // Verify signature, parameters are message and signature
+    GetPublicKey,                      // Get public key
+    ExportWallet(bool),                // Export wallet (boolean parameter indicates whether to export private key)
+    ImportWallet(String),              // Import wallet, parameter is wallet data
 }
 
-// TEE操作结果
+// TEE operation result
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TeeResult {
     pub success: bool,
@@ -24,26 +50,26 @@ pub struct TeeResult {
     pub data: Option<String>,
 }
 
-// TEE状态
+// TEE status
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TeeStatus {
-    pub available: bool,          // TEE是否可用
-    pub initialized: bool,        // TEE是否已初始化
-    pub type_name: String,        // TEE类型名称
-    pub version: String,          // TEE版本
-    pub wallet_created: bool,     // 是否已创建钱包
+    pub available: bool,          // Whether TEE is available
+    pub initialized: bool,        // Whether TEE is initialized
+    pub type_name: String,        // TEE type name
+    pub version: String,          // TEE version
+    pub wallet_created: bool,     // Whether wallet is created
 }
 
-// 错误类型
+// Error types
 #[derive(Debug)]
 pub enum TeeError {
-    NotSupported,                 // 不支持TEE
-    NotInitialized,               // TEE未初始化
-    OperationFailed(String),      // 操作失败
-    IoError(IoError),             // IO错误
+    NotSupported,                 // TEE not supported
+    NotInitialized,               // TEE not initialized
+    OperationFailed(String),      // Operation failed
+    IoError(IoError),             // I/O error
 }
 
-// 为 TeeError 实现 Display 特性
+// Implement Display trait for TeeError
 impl fmt::Display for TeeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -61,64 +87,43 @@ impl From<IoError> for TeeError {
     }
 }
 
-// 获取TEE状态
-pub fn get_tee_status() -> Result<TeeStatus, TeeError> {
-    // 实际实现应检查TEE环境
-    // 目前返回模拟数据
-    let status = TeeStatus {
-        available: false,
-        initialized: false,
-        type_name: "None".to_string(),
-        version: "0.0.0".to_string(),
-        wallet_created: false,
-    };
-    
-    Ok(status)
+// Get TEE status - async function
+pub async fn get_tee_status() -> Result<TeeStatus, TeeError> {
+    // Get adapter lock asynchronously
+    let adapter = TEE_ADAPTER.lock().await;
+    adapter.get_status()
 }
 
-// 初始化TEE环境
+// Initialize TEE environment
 pub async fn initialize_tee() -> Result<bool, TeeError> {
-    // 实际实现应初始化TEE环境
-    // 目前返回模拟结果
-    Err(TeeError::NotSupported)
-}
-
-// 执行TEE操作
-pub async fn perform_tee_operation(op: TeeOperation) -> Result<TeeResult, TeeError> {
-    // 检查TEE状态
-    let status = get_tee_status()?;
-    if !status.available {
-        return Err(TeeError::NotSupported);
-    }
-    if !status.initialized {
-        return Err(TeeError::NotInitialized);
-    }
-    
-    // 根据操作类型执行不同的操作
-    match op {
-        TeeOperation::CreateWallet => {
-            // 实际实现应在TEE中创建钱包
-            Err(TeeError::OperationFailed("尚未实现".to_string()))
-        },
-        TeeOperation::SignTransaction(_tx_data) => {
-            // 实际实现应在TEE中对交易进行签名
-            Err(TeeError::OperationFailed("尚未实现".to_string()))
-        },
-        TeeOperation::VerifySignature(_message, _signature) => {
-            // 实际实现应在TEE中验证签名
-            Err(TeeError::OperationFailed("尚未实现".to_string()))
-        },
-        TeeOperation::GetPublicKey => {
-            // 实际实现应从TEE中获取公钥
-            Err(TeeError::OperationFailed("尚未实现".to_string()))
-        },
-        TeeOperation::ExportWallet(_include_private_key) => {
-            // 实际实现应从TEE中导出钱包
-            Err(TeeError::OperationFailed("尚未实现".to_string()))
-        },
-        TeeOperation::ImportWallet(_wallet_data) => {
-            // 实际实现应将钱包导入TEE
-            Err(TeeError::OperationFailed("尚未实现".to_string()))
+    // First check current status to avoid redundant initialization
+    if let Ok(status) = get_tee_status().await {
+        if status.initialized {
+            return Ok(true); // Already initialized, return success
         }
     }
+    
+    // Get adapter and initialize - tokio::sync::Mutex returns the lock directly, not a Result
+    let mut adapter = TEE_ADAPTER.lock().await;
+        
+    adapter.initialize().await
+}
+
+// Configure TEE with specific parameters
+pub async fn configure_tee(tee_type: TEEType, connection_type: TEEConnectionType) -> Result<bool, TeeError> {
+    // Create a new adapter with the specified configuration
+    let new_adapter = TEEAdapterFactory::create_adapter(tee_type, Some(connection_type));
+    
+    // Replace the global adapter
+    *TEE_ADAPTER.lock().await = new_adapter;
+    
+    // Initialize the new adapter
+    initialize_tee().await
+}
+
+// Perform TEE operation
+pub async fn perform_tee_operation(op: TeeOperation) -> Result<TeeResult, TeeError> {
+    // Get adapter and perform operation
+    let mut adapter = TEE_ADAPTER.lock().await;
+    adapter.perform_operation(op).await
 } 

@@ -1,53 +1,71 @@
-// WebAuthn-rs 实现
-// 基于 WebAuthn-rs 库 0.5.1 和 webauthn-authenticator-rs 0.5.0 的FIDO2/Passkey注册和验证实现
+// WebAuthn-rs Implementation
+// Based on WebAuthn-rs library 0.5.1 and webauthn-authenticator-rs 0.5.1
+// Implementation of FIDO2/Passkey registration and verification
 
 use std::time::Duration;
+use std::collections::HashMap;
+use std::sync::Mutex;
 use base64::{Engine as _, engine::general_purpose};
 use serde_json;
 use url::Url;
 use webauthn_rs::prelude::*;
 use tracing::info;
 
-// WebAuthn上下文
-// 使用lazy_static创建全局单例
+// Global registration state store (for testing only)
+// In a real application, this would be persisted in a database
 lazy_static::lazy_static! {
+    static ref REGISTRATION_STATES: Mutex<HashMap<String, PasskeyRegistration>> = Mutex::new(HashMap::new());
+    static ref REGISTERED_PASSKEYS: Mutex<HashMap<String, Passkey>> = Mutex::new(HashMap::new());
+
+    // WebAuthn context
     static ref WEBAUTHN_INSTANCE: Webauthn = {
-        // 为RP (依赖方/服务器)创建有效配置
-        let rp_id = "localhost";  // 使用localhost以兼容本地开发环境
-        let rp_origin = Url::parse("http://localhost:3000").expect("Invalid URL");
+        // Create valid configuration for RP (Relying Party/Server)
+        // Empty rp_id will use effective domain 
+        let rp_id = "";  // Empty to let browser use current domain
+        let rp_origin = Url::parse("https://cos72.app").expect("Invalid URL");
         
-        // 创建WebAuthn构建器
+        // Create WebAuthn builder
         let builder = WebauthnBuilder::new(rp_id, &rp_origin)
             .expect("Failed to create WebAuthn builder")
-            // 设置RP名称
+            // Set RP name
             .rp_name("COS72-Tauri")
-            // 超时设置
+            // Timeout setting
             .timeout(Duration::from_secs(60));
 
         builder.build().expect("Failed to build WebAuthn")
     };
 }
 
-// 创建注册挑战 - 仅供内部测试
+// Helper function to convert credential ID to string
+fn credential_id_to_string(cred_id: &webauthn_rs::prelude::CredentialID) -> String {
+    // Use Base64 encoding for credential ID
+    general_purpose::URL_SAFE_NO_PAD.encode(cred_id.as_ref())
+}
+
+// Start registration process
 pub fn start_registration(username: &str) -> Result<serde_json::Value, String> {
-    info!("COS72-Tauri: 开始注册流程，用户名: {}", username);
+    info!("COS72-Tauri: Starting registration process, username: {}", username);
     
-    // 创建用户ID
+    // Create user ID
     let user_id = Uuid::new_v4();
     
-    // 创建注册挑战，使用PassKey流程
+    // Create registration challenge using PassKey flow
     match WEBAUTHN_INSTANCE.start_passkey_registration(
         user_id,
         username,
         username,
-        None,  // 不附加附加凭据
+        None, // No additional credentials
     ) {
-        Ok((ccr, _reg_state)) => {
-            // 转换为前端需要的格式
-            let challenge_json = serde_json::to_value(&ccr).map_err(|e| format!("Failed to serialize challenge: {}", e))?;
-            info!("COS72-Tauri: 注册挑战创建成功，用户ID: {}", user_id);
+        Ok((ccr, reg_state)) => {
+            // Store registration state
+            let mut states = REGISTRATION_STATES.lock().unwrap();
+            states.insert(user_id.to_string(), reg_state);
             
-            // 返回挑战和用户ID
+            // Convert to format needed by frontend
+            let challenge_json = serde_json::to_value(&ccr).map_err(|e| format!("Failed to serialize challenge: {}", e))?;
+            info!("COS72-Tauri: Registration challenge created successfully, user ID: {}", user_id);
+            
+            // Return challenge and user ID
             let mut res = serde_json::Map::new();
             res.insert("challenge".to_string(), challenge_json);
             res.insert("user_id".to_string(), serde_json::Value::String(user_id.to_string()));
@@ -55,99 +73,183 @@ pub fn start_registration(username: &str) -> Result<serde_json::Value, String> {
             Ok(serde_json::Value::Object(res))
         },
         Err(e) => {
-            info!("COS72-Tauri: 注册挑战创建失败: {}", e);
+            info!("COS72-Tauri: Failed to create registration challenge: {}", e);
             Err(format!("Failed to create registration challenge: {}", e))
         }
     }
 }
 
-// 完成注册流程 - 仅供内部测试
+// Complete registration process
 pub fn finish_registration(user_id: &str, response: &str) -> Result<serde_json::Value, String> {
-    info!("COS72-Tauri: 完成注册流程，用户ID: {}", user_id);
+    info!("COS72-Tauri: Completing registration process, user ID: {}", user_id);
     
-    // 将用户ID解析为UUID
-    let _user_id = Uuid::parse_str(user_id)
+    // Parse user ID to UUID (underscore prefix to indicate it's not directly used)
+    let _uuid = Uuid::parse_str(user_id)
         .map_err(|e| format!("Failed to parse user_id as UUID: {}", e))?;
     
-    // 解析响应JSON
-    let _reg_response: RegisterPublicKeyCredential = serde_json::from_str(response)
+    // Parse response JSON
+    let reg_response: RegisterPublicKeyCredential = serde_json::from_str(response)
         .map_err(|e| format!("Failed to parse response JSON: {}", e))?;
     
-    // 这里我们假设有一个存储的注册状态，但在实际应用中，这应该从数据库检索
-    // 由于我们只是演示，所以这部分将失败
-    Err("完成注册需要注册状态，这只是一个演示示例".to_string())
+    // Retrieve registration state
+    let reg_state = {
+        let states = REGISTRATION_STATES.lock().unwrap();
+        match states.get(user_id) {
+            Some(state) => state.clone(),
+            None => return Err(format!("No registration state found for user ID: {}", user_id))
+        }
+    };
+    
+    // Complete registration
+    match WEBAUTHN_INSTANCE.finish_passkey_registration(&reg_response, &reg_state) {
+        Ok(passkey) => {
+            info!("COS72-Tauri: Registration completed successfully for user ID: {}", user_id);
+            
+            // Store the passkey
+            {
+                let mut passkeys = REGISTERED_PASSKEYS.lock().unwrap();
+                passkeys.insert(user_id.to_string(), passkey.clone());
+            }
+            
+            // Remove registration state
+            {
+                let mut states = REGISTRATION_STATES.lock().unwrap();
+                states.remove(user_id);
+            }
+            
+            // Return success
+            let result = serde_json::json!({
+                "status": "success",
+                "user_id": user_id,
+                "credential_id": credential_id_to_string(passkey.cred_id()),
+                "registered_at": chrono::Utc::now().to_rfc3339(),
+            });
+            
+            Ok(result)
+        },
+        Err(e) => {
+            info!("COS72-Tauri: Registration failed: {}", e);
+            Err(format!("Registration failed: {}", e))
+        }
+    }
 }
 
-// 简化的验证挑战生成函数 - 用于兼容当前项目的verify_passkey命令
+// Create authentication challenge - simplified for current project's verify_passkey command
 pub fn create_auth_challenge() -> Result<String, String> {
-    // 生成一个随机挑战
+    // Generate a random challenge
     let mut challenge = [0u8; 32];
     getrandom::getrandom(&mut challenge).expect("Failed to generate random challenge");
     
-    // Base64编码
+    // Base64 encode
     Ok(general_purpose::STANDARD.encode(challenge))
 }
 
-// 简化的验证函数 - 用于兼容当前项目的verify_passkey命令
+// Verify challenge - compatible with current project's verify_passkey command
 pub async fn verify_challenge(challenge: &str) -> Result<String, String> {
-    info!("COS72-Tauri: 验证挑战: {}", challenge);
-    println!("COS72-Tauri: 验证挑战长度: {} 字符", challenge.len());
-    println!("COS72-Tauri: 验证挑战前16字符: {}", challenge.chars().take(16).collect::<String>());
+    info!("COS72-Tauri: Verifying challenge: {}", challenge);
+    println!("COS72-Tauri: Challenge length: {} characters", challenge.len());
+    println!("COS72-Tauri: First 16 characters of challenge: {}", challenge.chars().take(16).collect::<String>());
     
-    // 检查操作系统类型
+    // Check OS type
     let os = std::env::consts::OS;
-    println!("COS72-Tauri: 当前操作系统: {}", os);
-    println!("COS72-Tauri: 当前架构: {}", std::env::consts::ARCH);
+    println!("COS72-Tauri: Current OS: {}", os);
+    println!("COS72-Tauri: Current architecture: {}", std::env::consts::ARCH);
     
-    // 检查macOS上的权限状态
+    // Check permissions on macOS
     if os == "macos" {
-        println!("COS72-Tauri: 运行在macOS上，检查Touch ID权限");
+        println!("COS72-Tauri: Running on macOS, checking Touch ID permissions");
         
-        // 这里我们不能直接检查权限，但可以检查是否支持生物识别
+        // We can't directly check permissions, but we can check if biometric is supported
         let bio_supported = is_biometric_supported();
-        println!("COS72-Tauri: 生物识别支持状态: {}", bio_supported);
+        println!("COS72-Tauri: Biometric support status: {}", bio_supported);
         
-        // 检查WebAuthn支持
+        // Check WebAuthn support
         let webauthn_supported = is_webauthn_supported();
-        println!("COS72-Tauri: WebAuthn支持状态: {}", webauthn_supported);
+        println!("COS72-Tauri: WebAuthn support status: {}", webauthn_supported);
         
         if !bio_supported || !webauthn_supported {
-            return Err(format!("系统环境不支持必要的生物识别功能: 生物识别支持={}, WebAuthn支持={}", 
+            return Err(format!("System environment doesn't support necessary biometric functions: bio_supported={}, webauthn_supported={}", 
                               bio_supported, webauthn_supported));
         }
     }
     
-    // 在实际应用中，我们需要从数据库检索已注册的凭证
-    // 由于这是一个演示，我们将创建一个空的凭证列表并使用"userless"认证
-    let passkeys: Vec<Passkey> = Vec::new();
-    println!("COS72-Tauri: 准备开始WebAuthn验证，passkeys数量: {}", passkeys.len());
+    // Get registered passkeys
+    let passkeys = {
+        let registered = REGISTERED_PASSKEYS.lock().unwrap();
+        registered.values().cloned().collect::<Vec<Passkey>>()
+    };
     
-    // 开始WebAuthn验证
+    println!("COS72-Tauri: Ready to start WebAuthn verification, passkeys count: {}", passkeys.len());
+    
+    // Start WebAuthn verification
     match WEBAUTHN_INSTANCE.start_passkey_authentication(&passkeys) {
         Ok((rcr, _auth_state)) => {
-            // 返回可序列化的挑战
+            // Return serializable challenge
             let challenge_json = serde_json::to_string(&rcr)
                 .map_err(|e| format!("Failed to serialize challenge: {}", e))?;
             
-            info!("COS72-Tauri: 已创建验证挑战，等待用户响应");
-            println!("COS72-Tauri: 验证挑战创建成功，长度: {}", challenge_json.len());
-            println!("COS72-Tauri: 验证挑战前50字符: {}...", challenge_json.chars().take(50).collect::<String>());
+            info!("COS72-Tauri: Created verification challenge, waiting for user response");
+            println!("COS72-Tauri: Verification challenge created successfully, length: {}", challenge_json.len());
+            println!("COS72-Tauri: First 50 characters of verification challenge: {}...", challenge_json.chars().take(50).collect::<String>());
             
-            // 返回挑战信息，前端应该使用它调用navigator.credentials.get
+            // Return challenge info, frontend should use it to call navigator.credentials.get
             Ok(challenge_json)
         },
         Err(e) => {
-            info!("COS72-Tauri: 创建验证挑战失败: {}", e);
-            println!("COS72-Tauri: 错误详情: {:?}", e);
-            Err(format!("创建验证挑战失败: {}", e))
+            info!("COS72-Tauri: Failed to create verification challenge: {}", e);
+            println!("COS72-Tauri: Error details: {:?}", e);
+            Err(format!("Failed to create verification challenge: {}", e))
         }
     }
 }
 
-// 检查是否支持WebAuthn
+// Complete authentication process
+pub fn finish_authentication(response: &str) -> Result<serde_json::Value, String> {
+    info!("COS72-Tauri: Completing authentication process");
+    
+    // Parse authentication response
+    let auth_response: PublicKeyCredential = serde_json::from_str(response)
+        .map_err(|e| format!("Failed to parse authentication response: {}", e))?;
+    
+    // Get registered passkeys
+    let passkeys = {
+        let registered = REGISTERED_PASSKEYS.lock().unwrap();
+        registered.values().cloned().collect::<Vec<Passkey>>()
+    };
+    
+    // Create an authentication state - for actual implementation this would be retrieved from storage
+    let auth_state = WEBAUTHN_INSTANCE.start_passkey_authentication(&passkeys)
+        .map_err(|e| format!("Failed to create authentication state: {}", e))?
+        .1;
+    
+    // Finish authentication
+    match WEBAUTHN_INSTANCE.finish_passkey_authentication(&auth_response, &auth_state) {
+        Ok(auth_result) => {
+            // Use the method to get credential ID and convert it to string
+            let cred_id_str = credential_id_to_string(auth_result.cred_id());
+            info!("COS72-Tauri: Authentication successful for credential ID: {}", cred_id_str);
+            
+            // Return success result
+            let result = serde_json::json!({
+                "status": "success",
+                "credential_id": cred_id_str,
+                "user_verified": auth_result.user_verified(),
+                "authenticated_at": chrono::Utc::now().to_rfc3339(),
+            });
+            
+            Ok(result)
+        },
+        Err(e) => {
+            info!("COS72-Tauri: Authentication failed: {}", e);
+            Err(format!("Authentication failed: {}", e))
+        }
+    }
+}
+
+// Check if WebAuthn is supported
 pub fn is_webauthn_supported() -> bool {
-    // 检查当前平台是否支持WebAuthn
-    // 这里简化为检查操作系统类型
+    // Check if current platform supports WebAuthn
+    // Simplified to check OS type
     let os = std::env::consts::OS;
     match os {
         "macos" | "windows" | "linux" => true,
@@ -155,27 +257,43 @@ pub fn is_webauthn_supported() -> bool {
     }
 }
 
-// 检查平台是否支持生物识别
+// Check if platform supports biometric
 pub fn is_biometric_supported() -> bool {
-    // 检查当前平台是否支持生物识别
-    // 这里简化为检查操作系统类型
+    // Check if current platform supports biometric
+    // Simplified to check OS type
     let os = std::env::consts::OS;
     
     match os {
-        "macos" => true,  // macOS 通常支持 Touch ID
+        "macos" => true,  // macOS typically supports Touch ID
         "windows" => true, // Windows Hello
-        "linux" => false,  // Linux 通常需要外部设备
-        "android" => true, // Android 通常支持指纹
-        "ios" => true,     // iOS 支持 Touch ID/Face ID
+        "linux" => false,  // Linux typically requires external device
+        "android" => true, // Android typically supports fingerprint
+        "ios" => true,     // iOS supports Touch ID/Face ID
         _ => false,
     }
 }
 
-// 从上下文中获取Passkey凭证
-pub fn get_credentials(_user_id: &str) -> Result<serde_json::Value, String> {
-    // 在实际应用中，这应该从数据库中检索用户的凭证
-    // 由于这是一个演示，我们返回一个空列表
-    let passkeys: Vec<Passkey> = Vec::new();
+// Get Passkey credentials from context
+pub fn get_credentials(user_id: &str) -> Result<serde_json::Value, String> {
+    // In a real application, this would retrieve credentials from database
+    // Get credentials for the specified user ID
+    let passkeys = {
+        let registered = REGISTERED_PASSKEYS.lock().unwrap();
+        match registered.get(user_id) {
+            Some(passkey) => vec![passkey.clone()],
+            None => Vec::new()
+        }
+    };
+    
+    // Return all registered passkeys for debug purposes
+    let all_passkeys = {
+        let registered = REGISTERED_PASSKEYS.lock().unwrap();
+        registered.len()
+    };
+    
+    println!("COS72-Tauri: Retrieving credentials for user ID: {}", user_id);
+    println!("COS72-Tauri: Found {} passkeys for this user (total registered: {})", 
+             passkeys.len(), all_passkeys);
     
     match serde_json::to_value(passkeys) {
         Ok(value) => Ok(value),

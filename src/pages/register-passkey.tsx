@@ -3,124 +3,136 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { isTauriEnvironment } from '../lib/tauri-api';
 import { 
-  checkWebAuthnSupport, 
-  startRegistration, 
-  finishRegistration,
-  WebAuthnSupport
-} from '../lib/webauthn-api';
+  checkPasskeySupport, 
+  registerPasskey, 
+  PasskeyStatus 
+} from '../lib/passkey-manager-simple';
 
-// 创建注册页面
+// Create registration page
 export default function RegisterPasskey() {
   const [username, setUsername] = useState<string>('');
   const [userId, setUserId] = useState<string>('');
-  const [environment, setEnvironment] = useState<string>('检测中...');
+  const [environment, setEnvironment] = useState<string>('Detecting...');
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
-  const [status, setStatus] = useState<string>('就绪');
-  const [support, setSupport] = useState<WebAuthnSupport | null>(null);
+  const [status, setStatus] = useState<string>('Ready');
+  const [support, setSupport] = useState<PasskeyStatus | null>(null);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [showDebug, setShowDebug] = useState<boolean>(false);
+  const [tauriAPIInfo, setTauriAPIInfo] = useState<string>('Not detected');
 
-  // 添加日志
+  // Add log
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     setDebugLogs(prev => [`[${timestamp}] ${message}`, ...prev.slice(0, 49)]);
   };
 
-  // 检测环境
+  // Detect environment
   useEffect(() => {
     const checkEnvironment = async () => {
       const isTauri = await isTauriEnvironment();
-      const env = isTauri ? 'Tauri 应用' : '网页浏览器';
-      console.log(`检测到环境: ${env}`);
+      const env = isTauri ? 'Tauri App' : 'Web Browser';
+      console.log(`Detected environment: ${env}`);
       setEnvironment(env);
-      addLog(`环境检测: ${env}`);
+      addLog(`Environment detection: ${env}`);
+      
+      // Check window.__TAURI__ object
+      console.log('window.__TAURI__ exists:', window.__TAURI__ !== undefined);
+      addLog(`window.__TAURI__ exists: ${window.__TAURI__ !== undefined}`);
+      
+      // Check window.__TAURI_IPC__ object
+      console.log('window.__TAURI_IPC__ type:', typeof window.__TAURI_IPC__);
+      addLog(`window.__TAURI_IPC__ type: ${typeof window.__TAURI_IPC__}`);
+      
+      // Check window.__IS_TAURI_APP__
+      console.log('window.__IS_TAURI_APP__:', window.__IS_TAURI_APP__);
+      addLog(`window.__IS_TAURI_APP__: ${window.__IS_TAURI_APP__}`);
+      
+      // Check UserAgent
+      const userAgent = navigator.userAgent;
+      console.log('UserAgent:', userAgent);
+      addLog(`UserAgent: ${userAgent}`);
+      
+      // Collect Tauri API information
+      const tauri_exists = window.__TAURI__ !== undefined ? 'exists' : 'not found';
+      const tauri_ipc_type = typeof window.__TAURI_IPC__ === 'undefined' ? 'undefined' : typeof window.__TAURI_IPC__;
+      
+      const apiInfo = [
+        `Environment: ${env}`,
+        `window.__TAURI__: ${tauri_exists}`,
+        `window.__TAURI_IPC__: ${tauri_ipc_type}`,
+        `window.__IS_TAURI_APP__: ${window.__IS_TAURI_APP__ ? 'true' : 'false'}`,
+        `Tauri in UserAgent: ${userAgent.includes('Tauri') || userAgent.includes('wry')}`
+      ].join('\n');
+      
+      setTauriAPIInfo(apiInfo);
     };
     
     checkEnvironment();
   }, []);
 
-  // 检查WebAuthn支持
+  // Check WebAuthn support
   useEffect(() => {
-    checkWebAuthnSupport().then(result => {
+    checkPasskeySupport().then(result => {
       setSupport(result);
-      addLog(`WebAuthn支持: ${result.webauthnSupported}`);
-      addLog(`生物识别支持: ${result.biometricsSupported}`);
+      addLog(`WebAuthn support: ${result.isSupported}`);
+      addLog(`Biometric support: ${result.isBiometricSupported}`);
+      addLog(`Platform authenticator: ${result.isPlatformAuthenticator}`);
     }).catch(error => {
-      console.error('WebAuthn检测错误:', error);
-      addLog(`WebAuthn检测错误: ${error}`);
+      console.error('WebAuthn detection error:', error);
+      addLog(`WebAuthn detection error: ${error}`);
     });
   }, []);
 
-  // 开始注册流程
+  // Start registration process
   const handleStartRegistration = async () => {
     try {
       setIsRegistering(true);
-      setStatus('正在开始注册流程...');
+      setStatus('Starting registration process...');
       setError(null);
       setResult(null);
 
       if (!username || username.trim() === '') {
-        setError('用户名不能为空');
-        setStatus('注册失败');
+        setError('Username cannot be empty');
+        setStatus('Registration failed');
         setIsRegistering(false);
         return;
       }
 
-      addLog(`开始注册流程，用户名: ${username}`);
+      addLog(`Starting registration process, username: ${username}`);
 
-      // 调用注册API
+      // Use the new passkey-manager for registration
       try {
-        const challenge = await startRegistration(username);
-        addLog(`注册挑战已创建，等待用户验证...`);
-        addLog(`用户ID: ${challenge.user_id}`);
-        setUserId(challenge.user_id);
-        setStatus('请在弹出的生物识别提示中完成验证');
-
-        // 转换为浏览器可理解的格式
-        const publicKeyCredentialCreationOptions = challenge.challenge;
-        console.log('注册选项:', publicKeyCredentialCreationOptions);
-
-        // 请求创建凭证
-        // 这里会触发平台的生物识别
-        console.log('调用navigator.credentials.create');
-        const credential = await navigator.credentials.create({
-          publicKey: publicKeyCredentialCreationOptions
-        });
-        console.log('凭证创建结果:', credential);
-
-        // 完成注册
-        if (credential) {
-          const credentialJson = JSON.stringify(credential);
-          console.log('凭证JSON:', credentialJson);
-          addLog('凭证创建成功，正在完成注册...');
-
-          const registrationResult = await finishRegistration(
-            challenge.user_id,
-            credentialJson
-          );
-
-          console.log('注册结果:', registrationResult);
-          addLog(`注册完成: ${JSON.stringify(registrationResult.status)}`);
-
+        // Call registration API
+        const registrationResult = await registerPasskey(username);
+        
+        if (registrationResult.status === 'success') {
+          console.log('Registration result:', registrationResult);
+          addLog(`Registration completed: ${JSON.stringify(registrationResult.status)}`);
+          
           setResult(registrationResult);
-          setStatus('注册成功');
+          setStatus('Registration successful');
+          
+          // Save user ID if available
+          if (registrationResult.credential && registrationResult.credential.userId) {
+            setUserId(registrationResult.credential.userId);
+          }
         } else {
-          throw new Error('凭证创建失败');
+          throw new Error(registrationResult.error || 'Registration failed');
         }
       } catch (apiError: any) {
-        console.error('API错误:', apiError);
-        addLog(`API错误: ${apiError.message || apiError}`);
+        console.error('API error:', apiError);
+        addLog(`API error: ${apiError.message || apiError}`);
         throw apiError;
       }
     } catch (err: any) {
-      console.error('注册错误:', err);
+      console.error('Registration error:', err);
       let errorMessage = err instanceof Error ? err.message : String(err);
       
-      addLog(`注册失败: ${errorMessage}`);
+      addLog(`Registration failed: ${errorMessage}`);
       setError(errorMessage);
-      setStatus('注册失败');
+      setStatus('Registration failed');
     } finally {
       setIsRegistering(false);
     }
@@ -129,174 +141,165 @@ export default function RegisterPasskey() {
   return (
     <div className="min-h-screen bg-gray-100">
       <Head>
-        <title>注册 Passkey - COS72</title>
-        <meta name="description" content="注册FIDO2 Passkey功能" />
+        <title>Register Passkey - COS72</title>
+        <meta name="description" content="Register FIDO2 Passkey functionality" />
       </Head>
 
+      {/* Top navigation menu */}
+      <nav className="bg-white shadow-md p-4">
+        <div className="container mx-auto flex justify-between items-center">
+          <span className="font-bold text-xl">COS72 - Community OS</span>
+          <div className="space-x-4">
+            <Link href="/" className="text-blue-500 hover:text-blue-700">
+              Home
+            </Link>
+            <Link href="/register-passkey" className="text-blue-700 font-semibold">
+              Register Passkey
+            </Link>
+            <Link href="/test-passkey" className="text-blue-500 hover:text-blue-700">
+              Test Signature
+            </Link>
+          </div>
+        </div>
+      </nav>
+
       <main className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-center mb-8">注册 FIDO2 Passkey</h1>
+        <h1 className="text-3xl font-bold text-center mb-8">Register FIDO2 Passkey</h1>
         
+        {/* Environment information */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">环境信息</h2>
-          <p className="text-sm text-gray-600 mb-4">当前运行环境: <span className="font-medium">{environment}</span></p>
+          <h2 className="text-xl font-semibold mb-4">Environment Information</h2>
+          <p className="text-sm text-gray-600 mb-4">Current environment: <span className="font-medium">{environment}</span></p>
           
           {support && (
             <div className="mb-4">
               <p className="text-sm">
-                WebAuthn支持: 
-                <span className={support.webauthnSupported ? "text-green-600 ml-1" : "text-red-600 ml-1"}>
-                  {support.webauthnSupported ? '是' : '否'}
+                WebAuthn support: 
+                <span className={support.isSupported ? "text-green-600 ml-1" : "text-red-600 ml-1"}>
+                  {support.isSupported ? 'Yes' : 'No'}
                 </span>
               </p>
               <p className="text-sm">
-                生物识别支持: 
-                <span className={support.biometricsSupported ? "text-green-600 ml-1" : "text-red-600 ml-1"}>
-                  {support.biometricsSupported ? '是' : '否'}
+                Biometric support: 
+                <span className={support.isBiometricSupported ? "text-green-600 ml-1" : "text-red-600 ml-1"}>
+                  {support.isBiometricSupported ? 'Yes' : 'No'}
+                </span>
+              </p>
+              <p className="text-sm">
+                Platform authenticator: 
+                <span className={support.isPlatformAuthenticator ? "text-green-600 ml-1" : "text-red-600 ml-1"}>
+                  {support.isPlatformAuthenticator ? 'Yes' : 'No'}
                 </span>
               </p>
             </div>
           )}
           
-          {environment !== 'Tauri 应用' && (
+          {environment !== 'Tauri App' && (
             <div className="p-4 bg-yellow-50 border border-yellow-200 rounded mb-4">
               <p className="text-yellow-700">
-                ⚠️ 请注意: FIDO2 Passkey 功能需要在 Tauri 应用环境中运行。
-                在浏览器环境下可能无法完全正常工作。
+                ⚠️ Note: FIDO2 Passkey functionality needs to run in the Tauri app environment.
+                It may not function correctly in a browser environment.
               </p>
             </div>
           )}
           
-          {/* 调试开关 */}
+          {/* Debug toggle */}
           <div className="flex justify-end">
             <button 
               onClick={() => setShowDebug(!showDebug)} 
               className="text-xs px-2 py-1 bg-gray-200 hover:bg-gray-300 rounded"
             >
-              {showDebug ? '隐藏调试信息' : '显示调试信息'}
+              {showDebug ? 'Hide Debug Info' : 'Show Debug Info'}
             </button>
           </div>
         </div>
         
+        {/* Registration form */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">注册新的 Passkey</h2>
+          <h2 className="text-xl font-semibold mb-4">Register New Passkey</h2>
           
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-1">用户名</label>
+            <label className="block text-sm font-medium mb-1">Username</label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded"
-              placeholder="输入用户名"
+              placeholder="Enter username"
               disabled={isRegistering}
             />
-            <p className="text-xs text-gray-500 mt-1">此用户名将与您的Passkey关联</p>
+            <p className="text-xs text-gray-500 mt-1">This username will be associated with your Passkey</p>
           </div>
           
           <button
             onClick={handleStartRegistration}
-            disabled={isRegistering || !support?.webauthnSupported}
+            disabled={!!(isRegistering || (support && !support.isSupported))}
             className={`
               ${isRegistering 
                 ? 'bg-blue-300 cursor-not-allowed'
-                : !support?.webauthnSupported
+                : (support && !support.isSupported)
                   ? 'bg-gray-300 cursor-not-allowed'
                   : 'bg-blue-500 hover:bg-blue-600'
               } text-white py-2 px-4 rounded w-full
             `}
           >
-            {isRegistering ? '注册中...' : '注册 Passkey'}
+            {isRegistering ? 'Registering...' : 'Register Passkey'}
           </button>
           
           <div className="mt-4">
             <div className={`p-3 rounded ${
-              isRegistering 
-                ? 'bg-blue-50 border border-blue-200' 
-                : 'bg-gray-50 border border-gray-200'
-            }`}>
-              <p className="font-semibold">{isRegistering ? '处理中...' : '状态:'}</p>
-              <p className="text-sm mt-1">{status}</p>
-              {isRegistering && (
+                status === 'Registration successful' ? 'bg-green-50 text-green-800 border border-green-200' :
+                status === 'Registration failed' ? 'bg-red-50 text-red-800 border border-red-200' :
+                status !== 'Ready' ? 'bg-blue-50 text-blue-800 border border-blue-200' : 'hidden'
+              }`}
+            >
+              <p className="font-medium">{status}</p>
+              {error && <p className="text-red-600 text-sm mt-1">{error}</p>}
+              
+              {result && result.credential && (
                 <div className="mt-2">
-                  <div className="animate-pulse text-center text-sm text-blue-600">
-                    请注意系统生物识别提示
-                  </div>
+                  <h3 className="text-sm font-semibold">Registration successful!</h3>
+                  <p className="text-xs mt-1">Your Passkey has been registered. You can now use it for authentication.</p>
+                  
+                  {userId && (
+                    <div className="text-xs mt-2">
+                      <span className="font-medium">User ID: </span>
+                      <span className="font-mono bg-gray-100 px-1">{userId}</span>
+                      <p className="mt-1">Save this ID for testing your Passkey.</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           </div>
         </div>
         
-        {/* 结果显示 */}
-        {(result || error) && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">注册结果</h2>
-            
-            {error ? (
-              <div className="p-4 bg-red-50 border border-red-200 rounded">
-                <p className="font-semibold text-red-700">错误:</p>
-                <pre className="mt-2 text-sm whitespace-pre-wrap text-red-800">{error}</pre>
-              </div>
-            ) : (
-              <div className="p-4 bg-green-50 border border-green-200 rounded">
-                <p className="font-semibold text-green-700">成功:</p>
-                <p className="mt-2 text-sm">用户ID: {userId}</p>
-                <p className="mt-1 text-sm">状态: {result.status}</p>
-                <details className="mt-2">
-                  <summary className="text-sm font-medium cursor-pointer">查看凭证详情</summary>
-                  <pre className="mt-2 text-xs whitespace-pre-wrap overflow-auto max-h-64 bg-gray-100 p-2 rounded">
-                    {JSON.stringify(result.credential, null, 2)}
-                  </pre>
-                </details>
-              </div>
-            )}
-          </div>
-        )}
-        
-        {/* 调试日志 */}
+        {/* Debug information */}
         {showDebug && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">调试日志</h2>
-            <div className="bg-gray-900 text-gray-100 p-4 rounded font-mono text-xs overflow-auto max-h-64">
-              {debugLogs.length > 0 ? (
-                debugLogs.map((log, index) => (
-                  <div key={index} className="py-1 border-b border-gray-800">{log}</div>
-                ))
-              ) : (
-                <p className="italic text-gray-500">暂无日志</p>
-              )}
+            <h2 className="text-xl font-semibold mb-4">Debug Information</h2>
+            
+            <div className="mb-4">
+              <h3 className="text-sm font-medium mb-2">Tauri API Status</h3>
+              <pre className="bg-gray-50 p-3 rounded text-xs font-mono overflow-x-auto">
+                {tauriAPIInfo}
+              </pre>
+            </div>
+            
+            <div>
+              <h3 className="text-sm font-medium mb-2">Debug Logs</h3>
+              <div className="bg-gray-50 p-3 rounded h-60 overflow-y-auto">
+                {debugLogs.map((log, index) => (
+                  <div key={index} className="text-xs font-mono mb-1">{log}</div>
+                ))}
+                {debugLogs.length === 0 && (
+                  <p className="text-xs text-gray-500">No logs available</p>
+                )}
+              </div>
             </div>
           </div>
         )}
-        
-        {/* 帮助信息 */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">关于 FIDO2 Passkey 注册</h2>
-          <div className="text-sm text-gray-700 space-y-2">
-            <p>FIDO2 Passkey 注册流程会在您的设备上创建一对公私钥:</p>
-            <ul className="list-disc ml-5">
-              <li>私钥安全存储在您的设备中，从不传输到服务器</li>
-              <li>公钥会被发送到服务器并与您的账户关联</li>
-              <li>注册过程需要进行生物识别(指纹、面部识别)确认</li>
-              <li>完成注册后，您可以使用此Passkey进行安全登录</li>
-            </ul>
-          </div>
-        </div>
-        
-        {/* 导航链接 */}
-        <div className="text-center mt-6">
-          <Link href="/" className="text-blue-500 hover:text-blue-700 mr-4">
-            返回主页
-          </Link>
-          <Link href="/test-passkey" className="text-blue-500 hover:text-blue-700">
-            测试签名
-          </Link>
-        </div>
       </main>
-
-      <footer className="text-center py-6 text-gray-600">
-        <p>COS72 - 社区操作系统 v0.2.8</p>
-      </footer>
     </div>
   );
 } 

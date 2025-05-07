@@ -1,0 +1,42 @@
+version: '3'
+
+services:
+  # ETH Wallet Mock Service
+  eth-wallet-mock:
+    build:
+      context: .
+      dockerfile: Dockerfile.eth-wallet-mock
+    ports:
+      - "3030:3030"
+    volumes:
+      - ./wallet-data:/app/.eth-wallet-mock
+    restart: unless-stopped
+    networks:
+      - cos72-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3030/api/tee/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    environment:
+      - PORT=3030
+      - NODE_ENV=production
+
+  # Optional: You can include NGINX for HTTPS and better security
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "443:443"
+    volumes:
+      - ./nginx/conf:/etc/nginx/conf.d
+      - ./nginx/certs:/etc/nginx/certs
+    depends_on:
+      - eth-wallet-mock
+    networks:
+      - cos72-network
+    restart: unless-stopped
+
+networks:
+  cos72-network:
+    driver: bridge 

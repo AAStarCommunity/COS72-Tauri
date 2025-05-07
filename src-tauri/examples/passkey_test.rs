@@ -1,9 +1,3 @@
-/**
- * FIDO2/Passkey 直接测试示例
- * 使用: cargo run --example passkey_test "挑战字符串"
- */
-
-use std::env;
 use std::io;
 use std::time::Duration;
 use webauthn_rs::prelude::*;

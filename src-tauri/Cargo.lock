@@ -414,8 +414,10 @@ checksum = "c469d952047f47f91b68d1cba3f10d63c11d73e4636f24f08daf0278abf01c4d"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
+ "js-sys",
  "num-traits",
  "serde",
+ "wasm-bindgen",
  "windows-link",
 ]
 
@@ -514,13 +516,15 @@ dependencies = [
 
 [[package]]
 name = "cos72-tauri"
-version = "0.2.9"
+version = "0.3.3"
 dependencies = [
+ "async-trait",
  "base64 0.21.7",
  "chrono",
  "getrandom 0.2.16",
  "hex",
  "lazy_static",
+ "once_cell",
  "reqwest 0.11.27",
  "rustc_version_runtime",
  "serde",

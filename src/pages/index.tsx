@@ -3,6 +3,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 // 导入新的API包装器，而不是直接使用@tauri-apps/api
 import { invoke as invokeCommand, isTauriEnvironment, waitForTauriAPI, refreshTauriAPI } from '../lib/tauri-api';
+import Layout from '../components/Layout';
 
 // 硬件信息接口
 interface HardwareInfo {
@@ -345,14 +346,15 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <Layout environment={environment}>
       <Head>
-        <title>COS72 - 社区操作系统</title>
-        <meta name="description" content="基于Tauri的社区操作系统" />
+        <title>COS72 - Community OS</title>
+        <meta name="description" content="COS72 - Community OS, secure, private, efficient" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main className="container mx-auto px-4 py-8">
+      {/* 主内容区域 */}
+      <div className="space-y-6">
         <h1 className="text-3xl font-bold text-center mb-8">{greeting}</h1>
         
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -485,22 +487,7 @@ export default function Home() {
             )}
           </div>
         </div>
-      </main>
-
-      <footer className="text-center py-6 text-gray-600">
-        <p>COS72 - 社区操作系统 v0.2.10</p>
-        <p className="mt-2">
-          <Link href="/debug" className="text-blue-500 hover:text-blue-700 text-sm cursor-pointer mr-4">
-            调试页面
-          </Link>
-          <Link href="/test-passkey" className="text-blue-500 hover:text-blue-700 text-sm cursor-pointer mr-4">
-            FIDO2测试
-          </Link>
-          <Link href="/passkey-server" className="text-blue-500 hover:text-blue-700 text-sm cursor-pointer">
-            Passkey模拟服务器
-          </Link>
-        </p>
-      </footer>
-    </div>
+      </div>
+    </Layout>
   );
 } 
