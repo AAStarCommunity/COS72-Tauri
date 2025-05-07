@@ -1,11 +1,16 @@
 [package]
 name = "cos72-tauri"
-version = "0.2.6"
+version = "0.2.9"
 description = "Tauri based COS72 application framework"
 authors = ["COS72 Team"]
 license = ""
 repository = ""
 edition = "2021"
+
+# 设置lib名称，让示例可以引用库代码
+[lib]
+name = "cos72_tauri"
+path = "src/lib.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,17 +19,31 @@ tauri-build = { version = "2.0.0-beta", features = [] }
 
 [dependencies]
 # Tauri 2.0的features已经改变，不再使用dialog-all等命名
-tauri = { version = "2.0.0-beta", features = [] }
+tauri = { version = "2.0.0-beta.12", features = ["macos-private-api"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sysinfo = "0.29.8"
-sha2 = "0.10.7"
-hex = "0.4.3"
-reqwest = { version = "0.11.20", features = ["json", "stream"] }
-tokio = { version = "1.32.0", features = ["full"] }
-base64 = "0.21.3"
+sha2 = "0.10"
+hex = "0.4"
+reqwest = { version = "0.11", features = ["json", "blocking"] }
+tokio = { version = "1", features = ["full"] }
+base64 = "0.21"
 rustc_version_runtime = "0.2.1"
-chrono = "0.4.37"
+chrono = { version = "0.4.31", default-features = false, features = ["clock", "serde"] }
+uuid = { version = "1.6.1", features = ["v4", "serde"] }
+
+# WebAuthn/FIDO2 依赖 - 更新到最新版本
+webauthn-rs = { version = "0.5.1", features = ["danger-allow-state-serialisation"] }
+webauthn-rs-core = "0.5.1"
+webauthn-rs-proto = "0.5.1"
+webauthn-authenticator-rs = { version = "0.5.0", features = ["softpasskey", "ctap2", "crypto"], optional = true }
+lazy_static = "1.4"
+getrandom = "0.2"
+url = "2.4"
+tracing = "0.1.40"
+
+# 可选: 用于本地设备支持 (如需直接与设备交互)
+# 这个注释可以删除，因为我们已经定义了上面的可选依赖
 
 [dev-dependencies]
 tempfile = "3.8.0"
@@ -33,6 +52,8 @@ tempfile = "3.8.0"
 # this feature is used for production builds or when `devPath` points to the filesystem
 # DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
+# 启用设备直接支持
+device-support = ["dep:webauthn-authenticator-rs"]
 
 # 配置构建属性
 [profile.release]
@@ -44,4 +65,8 @@ opt-level = "s"
 # 示例配置
 [[example]]
 name = "direct_test"
-path = "examples/direct_test.rs" 
+path = "examples/direct_test.rs"
+
+[[example]]
+name = "passkey_test"
+path = "examples/passkey_test.rs" 

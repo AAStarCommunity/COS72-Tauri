@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 应用基本信息 -->
+    <key>CFBundleIdentifier</key>
+    <string>com.cos72.tauri</string>
+    <key>CFBundleName</key>
+    <string>COS72-Tauri</string>
+    <key>CFBundleDisplayName</key>
+    <string>COS72-Tauri</string>
+    <key>CFBundleVersion</key>
+    <string>0.2.9</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.2.9</string>
+    
+    <!-- 安全与权限 -->
+    <key>NSFaceIDUsageDescription</key>
+    <string>需要使用Touch ID或Face ID进行身份验证</string>
+    
+    <!-- macOS应用签名设置 -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+    <key>com.apple.security.device.camera</key>
+    <true/>
+    <key>com.apple.security.personal-information.location</key>
+    <true/>
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    <key>com.apple.security.network.client</key>
+    <true/>
+    
+    <!-- Touch ID权限 -->
+    <key>com.apple.security.authentication-services.identity</key>
+    <true/>
+</dict>
+</plist> 

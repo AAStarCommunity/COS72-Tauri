@@ -145,38 +145,85 @@ async fn sign_challenge_macos(challenge: &[u8]) -> Result<String, PasskeyError> 
 async fn sign_challenge_linux(challenge: &[u8]) -> Result<String, PasskeyError> {
     // 检查挑战是否为空
     if challenge.is_empty() {
+        println!("COS72-Tauri: Passkey错误 - 挑战为空");
         return Err(PasskeyError::Other("Challenge cannot be empty".to_string()));
     }
 
-    // 在实际生产环境中，应使用libfido2或类似库
-    // 参考: https://developers.yubico.com/libfido2/
-    // 或者使用Linux FIDO2 API
-    //
-    // 以下是模拟实现：
-    println!("调用Linux FIDO2设备进行签名...");
+    // 详细日志
+    println!("COS72-Tauri: 开始Linux FIDO2签名流程");
+    println!("COS72-Tauri: 挑战字节长度: {}", challenge.len());
+    println!("COS72-Tauri: 挑战前16字节: {:?}", &challenge[..std::cmp::min(16, challenge.len())]);
     
     // 检查是否有FIDO2设备连接
     let has_device = check_fido2_device_connected();
+    println!("COS72-Tauri: FIDO2设备连接状态: {}", has_device);
+    
     if !has_device {
+        println!("COS72-Tauri: 没有FIDO2设备连接");
         return Err(PasskeyError::DeviceError("No FIDO2 device connected".to_string()));
     }
     
-    // 模拟FIDO2设备验证延迟
-    tokio::time::sleep(tokio::time::Duration::from_millis(600)).await;
+    println!("COS72-Tauri: 调用Linux FIDO2设备进行签名...");
+    println!("COS72-Tauri: (这里应该会弹出FIDO2设备操作提示)");
     
-    // 生成模拟签名
-    let mut signature = Vec::from("SIGNED_BY_LINUX_FIDO2:".as_bytes());
+    // 实际生产环境中，应使用libfido2通过FFI调用：
+    // 1. 构建签名选项
+    // 2. 识别FIDO2设备
+    // 3. 发送挑战并接收签名
+    //
+    // 伪代码示例：
+    // ```
+    // let device = fido2_device_open_first();
+    // let credential_id = get_credential_for_device(device);
+    // let signature = fido2_authenticate(device, challenge, credential_id);
+    // ```
+    
+    // 模拟FIDO2设备验证延迟
+    println!("COS72-Tauri: 等待用户验证...");
+    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+    
+    // 生成模拟签名（WebAuthn格式的模拟响应）
+    let mut signature = Vec::from("FIDO2_SIGNATURE:".as_bytes());
     signature.extend_from_slice(challenge);
     
+    // 添加模拟authenticatorData和clientDataJSON字段
+    let auth_data = b"authenticator_data_placeholder";
+    let client_data = b"client_data_json_placeholder";
+    
+    signature.extend_from_slice(b"::");
+    signature.extend_from_slice(auth_data);
+    signature.extend_from_slice(b"::");
+    signature.extend_from_slice(client_data);
+    
     // 返回Base64编码的签名
-    Ok(general_purpose::STANDARD.encode(signature))
+    let result = general_purpose::STANDARD.encode(&signature);
+    println!("COS72-Tauri: FIDO2签名成功，返回签名结果");
+    println!("COS72-Tauri: 签名长度: {}", result.len());
+    
+    Ok(result)
 }
 
 // 辅助函数：检查FIDO2设备是否连接（模拟实现）
 #[cfg(target_os = "linux")]
 fn check_fido2_device_connected() -> bool {
-    // 实际实现应检查/dev/hidraw*设备或使用libfido2 API
-    // 这里简单模拟一个设备总是连接的情况
+    // 在实际生产环境中，应检查/dev/hidraw*设备或使用libfido2 API
+    println!("COS72-Tauri: 检查FIDO2设备连接状态");
+    
+    // 检查常见的FIDO2设备路径
+    let fido_paths = [
+        "/dev/hidraw0", "/dev/hidraw1", "/dev/hidraw2", 
+        "/dev/hidraw3", "/dev/hidraw4"
+    ];
+    
+    for path in fido_paths.iter() {
+        if std::path::Path::new(path).exists() {
+            println!("COS72-Tauri: 发现可能的FIDO2设备: {}", path);
+            return true;
+        }
+    }
+    
+    // 这里简单模拟一个设备总是连接的情况，便于测试
+    println!("COS72-Tauri: 没有找到物理FIDO2设备，但为测试目的返回true");
     true
 }
 

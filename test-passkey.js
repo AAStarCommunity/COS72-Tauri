@@ -1,41 +1,98 @@
 /**
- * 此脚本用于测试Tauri命令调用 - 专注于passkey签名
+ * 直接测试FIDO2 Passkey签名的命令行脚本
+ * 使用方法: node test-passkey.js
  */
+
 const { execSync } = require('child_process');
+const fs = require('fs');
+const { invoke } = require('@tauri-apps/api');
 
-console.log('======= 测试FIDO2 Passkey签名 =======');
+// 测试挑战 - Base64编码的"Hello, this is a test challenge"
+const TEST_CHALLENGE = "SGVsbG8sIHRoaXMgaXMgYSB0ZXN0IGNoYWxsZW5nZQ==";
 
-function testPasskeyCommand() {
-  console.log('\n测试verify_passkey命令...');
+// 创建logs目录（如果不存在）
+if (!fs.existsSync('logs')) {
+  fs.mkdirSync('logs');
+}
+
+// 日志文件名
+const logFileName = `logs/passkey-test-${new Date().toISOString().replace(/:/g, '-')}.log`;
+
+// 写入日志
+function log(message) {
+  const timestamp = new Date().toISOString();
+  const logMessage = `[${timestamp}] ${message}\n`;
+  
+  // 输出到控制台
+  console.log(message);
+  
+  // 写入日志文件
+  fs.appendFileSync(logFileName, logMessage);
+}
+
+// 基础测试工具
+const error = (msg) => console.error(`[${new Date().toLocaleTimeString()}] ERROR: ${msg}`);
+
+// 测试WebAuthn支持
+async function testWebAuthnSupport() {
+  log('检查WebAuthn支持...');
+  try {
+    const supported = await invoke('webauthn_supported');
+    log(`WebAuthn支持: ${supported}`);
+    
+    const biometricSupported = await invoke('webauthn_biometric_supported');
+    log(`生物识别支持: ${biometricSupported}`);
+    
+    return supported;
+  } catch (err) {
+    error(`检查WebAuthn支持失败: ${err}`);
+    return false;
+  }
+}
+
+// 测试Passkey签名
+async function testPasskeySignature() {
+  log('测试Passkey签名...');
+  
+  // 创建测试挑战
+  const challenge = Buffer.from('test challenge ' + Date.now()).toString('base64');
+  log(`使用挑战: ${challenge}`);
   
   try {
-    // 模拟challenge
-    const challenge = 'SGVsbG8sIHRoaXMgaXMgYSB0ZXN0IGNoYWxsZW5nZQ==';
-    const argsJson = JSON.stringify({ challenge }).replace(/"/g, '\\"');
+    log('调用verify_passkey命令...');
+    const result = await invoke('verify_passkey', { challenge });
+    log('签名结果:');
+    console.log(result);
+    return result;
+  } catch (err) {
+    error(`签名测试失败: ${err}`);
+    throw err;
+  }
+}
+
+// 执行所有测试
+async function runAllTests() {
+  try {
+    log('===== 开始WebAuthn/Passkey测试 =====');
     
-    // 构建CLI命令
-    const cliCommand = `cd src-tauri && cargo run --bin cos72-tauri -- verify_passkey '${argsJson}'`;
+    // 检查WebAuthn支持
+    const supported = await testWebAuthnSupport();
+    if (!supported) {
+      log('WebAuthn不支持，跳过后续测试');
+      return;
+    }
     
-    console.log('执行:', cliCommand);
+    // 测试签名
+    await testPasskeySignature();
     
-    // 执行命令
-    const output = execSync(cliCommand, { encoding: 'utf8' });
-    console.log('输出:', output);
-    return { success: true, output };
-  } catch (error) {
-    console.error('错误:', error.message);
-    return { success: false, error: error.message };
+    log('===== 测试完成 =====');
+  } catch (err) {
+    error(`测试过程中发生错误: ${err}`);
   }
 }
 
 // 执行测试
-const result = testPasskeyCommand();
-
-// 报告结果
-if (result.success) {
-  console.log('\n✅ 签名测试成功!');
-} else {
-  console.log('\n❌ 签名测试失败!');
-}
-
-console.log('\n测试完成。'); 
+runAllTests().catch(error => {
+  log(`顶层错误: ${error}`);
+  process.exit(1);
+}); 

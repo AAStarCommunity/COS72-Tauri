@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { invoke as invokeCommand, isTauriEnvironment } from '../lib/tauri-api';
+import { invoke as invokeCommand, isTauriEnvironment, waitForTauriAPI, refreshTauriAPI } from '../lib/tauri-api';
 
 // 硬件信息接口
 interface HardwareInfo {
@@ -39,10 +39,16 @@ export default function Plugins() {
   const [status, setStatus] = useState('加载中...');
   const [hardwareInfo, setHardwareInfo] = useState<HardwareInfo | null>(null);
   const [environment, setEnvironment] = useState<string>('检测中...');
+  const [isLoading, setIsLoading] = useState(false);
   
   // 检测环境
   useEffect(() => {
-    setEnvironment(isTauriEnvironment() ? 'Tauri 应用' : '网页浏览器');
+    const checkEnvironment = async () => {
+      const isTauri = await isTauriEnvironment();
+      setEnvironment(isTauri ? 'Tauri 应用' : '网页浏览器');
+    };
+    
+    checkEnvironment();
   }, []);
   
   // 模拟插件数据
@@ -73,7 +79,55 @@ export default function Plugins() {
   useEffect(() => {
     const checkHardware = async () => {
       try {
-        const info = await invokeCommand('detect_hardware') as HardwareInfo;
+        setIsLoading(true);
+        
+        // 等待Tauri API准备就绪
+        const isTauri = await isTauriEnvironment();
+        if (isTauri) {
+          const apiReady = await waitForTauriAPI(10000);
+          if (!apiReady) {
+            console.warn('等待Tauri API超时，将使用模拟数据');
+            setStatus('无法连接到Tauri API，使用模拟数据');
+          } else {
+            console.log('Tauri API已就绪，继续检测');
+          }
+        }
+        
+        // 添加更强大的重试机制
+        let retryCount = 0;
+        const maxRetries = 5;
+        let lastError: any = null;
+        
+        const attemptHardwareDetection = async (): Promise<HardwareInfo> => {
+          try {
+            console.log(`插件页面 - 硬件检测尝试 ${retryCount + 1}/${maxRetries + 1}`);
+            setStatus(`检测硬件中 (${retryCount + 1}/${maxRetries + 1})...`);
+            const info = await invokeCommand('detect_hardware') as HardwareInfo;
+            console.log('插件页面 - 硬件信息获取成功:', info);
+            return info;
+          } catch (error) {
+            lastError = error;
+            if (retryCount < maxRetries) {
+              retryCount++;
+              console.log(`插件页面 - 硬件检测尝试 ${retryCount}/${maxRetries} 失败，等待后重试...`);
+              
+              // 如果是Tauri环境但API调用失败，尝试刷新API
+              if (isTauri) {
+                const refreshed = await refreshTauriAPI();
+                console.log(`API刷新${refreshed ? '成功' : '失败'}`);
+              }
+              
+              // 等待时间随重试次数增加
+              const waitTime = 500 * retryCount;
+              setStatus(`检测失败，${waitTime}ms后重试 (${retryCount}/${maxRetries})...`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+              return attemptHardwareDetection();
+            }
+            throw error;
+          }
+        };
+        
+        const info = await attemptHardwareDetection();
         setHardwareInfo(info);
         
         // 获取已安装插件
@@ -96,7 +150,17 @@ export default function Plugins() {
       }
     };
     
-    checkHardware();
+    // 等待DOM加载完成后检测硬件
+    if (typeof window !== 'undefined') {
+      // 如果DOM已加载完成，立即执行
+      if (document.readyState === 'complete') {
+        checkHardware();
+      } else {
+        // 否则等待DOM加载完成
+        window.addEventListener('load', checkHardware);
+        return () => window.removeEventListener('load', checkHardware);
+      }
+    }
   }, []);
 
   // 下载插件
@@ -308,7 +372,7 @@ export default function Plugins() {
       </main>
 
       <footer className="text-center py-6 text-gray-600">
-        <p>COS72 - 社区操作系统 v0.2.6</p>
+        <p>COS72 - 社区操作系统 v0.2.10</p>
       </footer>
     </div>
   );

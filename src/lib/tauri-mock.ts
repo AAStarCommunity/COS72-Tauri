@@ -66,64 +66,85 @@ export function setMockHardwareType(type: 'arm' | 'x86') {
 }
 
 // 模拟invoke函数
-export function mockInvoke(command: string, args?: Record<string, any>): Promise<any> {
+export async function mockInvoke(command: string, args?: Record<string, any>): Promise<any> {
   console.log(`[MOCK] Tauri invoke: ${command}`, args);
   
   switch (command) {
     case 'detect_hardware':
       // 正确处理detect_hardware命令
       console.log('[MOCK] 返回硬件信息:', currentConfig);
-      return Promise.resolve(currentConfig);
+      return currentConfig;
     
     case 'check_hardware': // 兼容旧命名
       console.log('[MOCK] 处理旧命令名称check_hardware，返回硬件信息');
-      return Promise.resolve(currentConfig);
+      return currentConfig;
     
     case 'get_tee_status':
       // 只有在支持TEE的设备上返回有效状态
       if (currentConfig.tee.tee_type === 'none') {
-        return Promise.reject(new Error('TEE not supported on this device'));
+        throw new Error('TEE not supported on this device');
       }
-      return Promise.resolve(mockTeeStatus);
+      return mockTeeStatus;
     
     case 'initialize_tee':
       // 只有在支持TEE的设备上可以初始化
       if (currentConfig.tee.tee_type === 'none') {
-        return Promise.reject(new Error('TEE not supported on this device'));
+        throw new Error('TEE not supported on this device');
       }
       mockTeeStatus.initialized = true;
-      return Promise.resolve(true);
+      return true;
     
     case 'perform_tee_operation':
       // 只有在支持TEE的设备上可以执行操作
       if (currentConfig.tee.tee_type === 'none') {
-        return Promise.reject(new Error('TEE not supported on this device'));
+        throw new Error('TEE not supported on this device');
       }
       
       // 检查操作类型 - 从Rust端接收的是字符串枚举
       if (args?.operation === 'CreateWallet') {
         mockTeeStatus.wallet_created = true;
-        return Promise.resolve({ 
+        return { 
           success: true,
           message: "钱包创建成功",
           data: null
-        });
+        };
       }
-      return Promise.resolve({ 
+      return { 
         success: false, 
         message: "操作不支持",
         data: null
-      });
+      };
     
     case 'verify_passkey':
       console.log('[MOCK] 处理verify_passkey命令，参数:', args);
-      return Promise.resolve({ 
+      
+      // 添加延迟模拟真实的生物识别过程
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // 检查challenge是否有效
+      if (!args?.challenge) {
+        console.error('[MOCK] verify_passkey失败: 无效的challenge参数');
+        throw new Error('缺少challenge参数');
+      }
+      
+      console.log('[MOCK] verify_passkey执行成功');
+      
+      // 返回更完整的模拟签名结果，模拟WebAuthn响应格式
+      return { 
         success: true, 
-        signature: "模拟签名结果 - 实际Tauri环境中会返回真实签名" 
-      });
+        signature: "MOCK_SIGNATURE:" + args.challenge.substring(0, 10) + "...", 
+        authenticatorData: "mock_authenticator_data",
+        clientDataJSON: {
+          type: "webauthn.get",
+          challenge: args.challenge,
+          origin: window.location.origin
+        },
+        platform: navigator.platform,
+        timestamp: new Date().toISOString()
+      };
     
     default:
       console.error(`[MOCK] 未实现的命令: ${command}`);
-      return Promise.reject(new Error(`未实现的命令: ${command}`));
+      throw new Error(`未实现的命令: ${command}`);
   }
-} 
+}

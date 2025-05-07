@@ -1,6 +1,7 @@
 {
   "name": "cos72-tauri",
-  "version": "0.2.6",
+  "description": "COS72 Tauri Application",
+  "version": "0.2.11",
   "private": true,
   "scripts": {
     "dev": "next dev",

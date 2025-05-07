@@ -7,7 +7,7 @@
     "frontendDist": "../out"
   },
   "productName": "COS72",
-  "version": "0.2.6",
+  "version": "0.2.11",
   "identifier": "com.cos72.app",
   "plugins": {},
   "bundle": {
@@ -29,11 +29,12 @@
       "timestampUrl": ""
     },
     "macOS": {
-      "entitlements": null,
+      "entitlements": "entitlements.plist",
       "exceptionDomain": "",
       "frameworks": [],
       "providerShortName": null,
-      "signingIdentity": null
+      "signingIdentity": null,
+      "minimumSystemVersion": "10.15"
     }
   },
   "app": {
@@ -53,6 +54,6 @@
       }
     ],
     "withGlobalTauri": false,
-    "macOSPrivateApi": false
+    "macOSPrivateApi": true
   }
 } 

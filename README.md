@@ -187,3 +187,38 @@ Tauri完全可以集成TEE SDK，Rust层调用Teaclave SDK实现TEE功能，Node
 
 ------
 
+## 设计分析
+
+### Passkey同步问题
+关于Google Password Manager同步问题
+基于我对WebAuthn/FIDO2和Passkey的理解，以及在项目中的实现，我来解答关于Passkey与Google Password Manager同步的问题：
+在Tauri应用中实现的Passkey/WebAuthn功能与Google Password Manager的同步依赖于以下几个因素：
+实现方式：
+浏览器原生WebAuthn API实现的Passkey（如Google Demo使用的方式）可以与Google Password Manager同步，因为它们都是由同一个浏览器引擎管理的。
+Tauri/Rust实现的WebAuthn（使用webauthn-rs库）是直接与操作系统的生物识别API交互，绕过了浏览器引擎。
+操作系统集成：
+在macOS上，Passkey数据由系统的iCloud Keychain管理，而不是Google Password Manager。
+在Windows上，Passkey数据由Windows Hello管理，同样不会直接与Google同步。
+同步能力：
+目前我们的Tauri实现使用的是底层平台API创建的凭证，这些凭证可能无法直接与Google Password Manager同步。
+网页版的WebAuthn Demo（https://webauthn.firstyear.id.au/）可以同步是因为它们使用浏览器原生的WebAuthn API，Chrome浏览器会自动与Google Password Manager同步。
+结论：虽然我们的Tauri应用中实现的Passkey技术上能够创建和使用符合WebAuthn标准的凭证，但这些凭证可能无法与Google Password Manager同步，因为：
+Tauri WebView不直接连接到Google的同步基础设施
+使用的是操作系统API而非浏览器API
+凭证存储在本地设备上，由各自操作系统的凭证管理器控制
+如果希望实现与Google Password Manager的同步，可能需要：
+使用浏览器内置的WebAuthn API而非Rust库
+在网页模式下运行应用（而非Tauri应用）
+确保用户登录了Chrome并启用了同步功能
+
+结论：先不使用这几个系统通过，后面再说，给用户以选项
+1. 如果我给用户提供选择：基于Google或者基于iCloud或者Windows Hello来同步密钥对，那这个功能可以后期添加么？
+. 关于密钥同步功能
+是的，后期完全可以添加基于Google、iCloud或Windows Hello的密钥同步功能。实现方式如下：
+Google密码同步：可以通过集成Google Identity Services API和Chrome浏览器的WebAuthn实现，让Tauri应用能够使用Google账户关联的密钥。
+iCloud钥匙串同步：使用macOS的本地API与iCloud钥匙串交互，这需要添加额外的Objective-C/Swift代码与Apple的Keychain Services和iCloud同步API交互。
+Windows Hello同步：利用Windows WebAuthn API和Microsoft账户同步机制，可以在Windows设备间同步凭证。
+实现这个功能需要：
+添加平台特定代码来连接各系统的同步API
+提供统一的抽象层接口
+在用户界面中添加身份提供商选择

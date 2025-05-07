@@ -9,9 +9,11 @@ mod tee;
 mod plugin;
 
 use hardware::detect;
-use fido::passkey;
+use fido::webauthn;
 use tee::{TeeOperation, TeeResult};
 use serde_json::Value;
+use tauri::Manager;
+use tauri::Listener;
 
 // Tauri 2.0主程序入口
 fn main() {
@@ -32,11 +34,67 @@ fn main() {
             detect_hardware,
             verify_passkey,
             perform_tee_operation,
-            get_tee_status
+            get_tee_status,
+            initialize_tee,
+            webauthn_supported,
+            webauthn_biometric_supported,
+            webauthn_start_registration,
+            webauthn_finish_registration,
+            webauthn_get_credentials
         ])
         // 应用初始化事件处理
-        .setup(|_app| {
+        .setup(|app| {
             println!("COS72-Tauri: 应用初始化完成");
+            
+            // 获取主窗口
+            let window = app.get_webview_window("main");
+            
+            if let Some(window) = window {
+                println!("COS72-Tauri: 找到主窗口，准备配置");
+                
+                // 初始脚本 - 设置环境标记
+                let init_script = r#"
+                    window.__IS_TAURI_APP__ = true;
+                    console.log('[TAURI-INJECT] 环境标记已注入');
+                "#;
+                
+                if let Err(e) = window.eval(init_script) {
+                    println!("COS72-Tauri: 初始注入失败: {:?}", e);
+                } else {
+                    println!("COS72-Tauri: 初始注入成功");
+                }
+                
+                // 监听DOM就绪事件
+                let window_clone = window.clone();
+                let _ = window.listen("tauri://dom-ready", move |_| {
+                    println!("COS72-Tauri: DOM就绪事件触发");
+                    
+                    // 发送DOM就绪事件到前端
+                    let dom_ready_script = r#"
+                        console.log('[TAURI-INJECT] DOM已就绪');
+                        
+                        // 确保环境标记存在
+                        window.__IS_TAURI_APP__ = true;
+                        
+                        // 触发API就绪事件
+                        console.log('[TAURI-INJECT] 发送API就绪事件');
+                        const apiReadyEvent = new CustomEvent('tauri-api-ready', {
+                            detail: { version: '2.0.0' }
+                        });
+                        window.dispatchEvent(apiReadyEvent);
+                    "#;
+                    
+                    // 执行注入
+                    if let Err(e) = window_clone.eval(dom_ready_script) {
+                        println!("COS72-Tauri: DOM就绪注入失败: {:?}", e);
+                    } else {
+                        println!("COS72-Tauri: DOM就绪注入成功");
+                    }
+                });
+            } else {
+                println!("COS72-Tauri: 无法获取主窗口，跳过注入环境标识符");
+            }
+            
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -67,8 +125,13 @@ async fn detect_hardware() -> Result<Value, String> {
 // FIDO2验证函数
 #[tauri::command]
 async fn verify_passkey(challenge: String) -> Result<Value, String> {
-    println!("COS72-Tauri: 正在验证FIDO2密钥...");
-    println!("COS72-Tauri: 收到挑战: {}", challenge);
+    println!("===================================================");
+    println!("COS72-Tauri: FIDO2/Passkey验证请求已接收");
+    println!("COS72-Tauri: 挑战长度: {} 字符", challenge.len());
+    if !challenge.is_empty() {
+        let preview: String = challenge.chars().take(16).collect();
+        println!("COS72-Tauri: 挑战前16字符: {}", preview);
+    }
     
     // 检查挑战是否为空
     if challenge.trim().is_empty() {
@@ -80,20 +143,32 @@ async fn verify_passkey(challenge: String) -> Result<Value, String> {
     println!("COS72-Tauri: 当前操作系统: {}", std::env::consts::OS);
     println!("COS72-Tauri: 当前架构: {}", std::env::consts::ARCH);
     
-    // 调用平台特定的签名实现
-    match passkey::sign_challenge(&challenge).await {
-        Ok(result) => {
-            println!("COS72-Tauri: FIDO2验证成功");
-            println!("COS72-Tauri: 签名结果长度: {}", result.len());
+    // 检查macOS上的权限
+    if std::env::consts::OS == "macos" {
+        println!("COS72-Tauri: macOS上的WebAuthn支持: {}", webauthn::is_webauthn_supported());
+        println!("COS72-Tauri: macOS上的生物识别支持: {}", webauthn::is_biometric_supported());
+    }
+    
+    // 显示接下来要调用的函数
+    println!("COS72-Tauri: 准备调用webauthn::verify_challenge函数...");
+    
+    // 使用新的WebAuthn实现 
+    match webauthn::verify_challenge(&challenge).await {
+        Ok(signature) => {
+            println!("COS72-Tauri: FIDO2验证成功!");
+            println!("COS72-Tauri: 签名结果长度: {}", signature.len());
+            let preview: String = signature.chars().take(32).collect();
+            println!("COS72-Tauri: 签名结果前32字符: {}", preview);
             
             // 将结果转换为 JSON Value
             let json_result = serde_json::json!({
                 "success": true,
-                "signature": result,
+                "signature": signature,
                 "platform": std::env::consts::OS,
                 "timestamp": chrono::Utc::now().to_rfc3339()
             });
             println!("COS72-Tauri: 返回JSON结果: {}", json_result);
+            println!("===================================================");
             Ok(json_result)
         },
         Err(e) => {
@@ -106,6 +181,7 @@ async fn verify_passkey(challenge: String) -> Result<Value, String> {
                 "timestamp": chrono::Utc::now().to_rfc3339()
             });
             println!("COS72-Tauri: 返回错误JSON: {}", error_json);
+            println!("===================================================");
             Err(format!("FIDO2验证失败: {}", e))
         }
     }
@@ -130,15 +206,22 @@ async fn get_tee_status() -> Result<tee::TeeStatus, String> {
 
 // TEE操作函数
 #[tauri::command]
-async fn perform_tee_operation(operation: TeeOperation) -> Result<TeeResult, String> {
-    println!("COS72-Tauri: 正在执行TEE操作: {:?}", operation);
+async fn perform_tee_operation(operation: String) -> Result<TeeResult, String> {
+    println!("COS72-Tauri: 正在执行TEE操作: {}", operation);
+    
+    // 解析操作类型
+    let op = match operation.as_str() {
+        "CreateWallet" => TeeOperation::CreateWallet,
+        "GetPublicKey" => TeeOperation::GetPublicKey,
+        _ => return Err(format!("未知的TEE操作: {}", operation))
+    };
     
     // 检查TEE环境是否可用
     let tee_status = tee::get_tee_status().map_err(|e| e.to_string())?;
     
     if tee_status.available {
         println!("COS72-Tauri: TEE环境可用，执行操作");
-        match tee::perform_tee_operation(operation).await {
+        match tee::perform_tee_operation(op).await {
             Ok(result) => {
                 println!("COS72-Tauri: TEE操作成功");
                 Ok(result)
@@ -151,6 +234,58 @@ async fn perform_tee_operation(operation: TeeOperation) -> Result<TeeResult, Str
     } else {
         println!("COS72-Tauri: TEE环境不可用");
         Err("TEE环境不可用".to_string())
+    }
+}
+
+// 检查是否支持WebAuthn
+#[tauri::command]
+fn webauthn_supported() -> bool {
+    println!("COS72-Tauri: 检查WebAuthn支持");
+    webauthn::is_webauthn_supported()
+}
+
+// 检查是否支持生物识别
+#[tauri::command]
+fn webauthn_biometric_supported() -> bool {
+    println!("COS72-Tauri: 检查生物识别支持");
+    webauthn::is_biometric_supported()
+}
+
+// 开始注册流程
+#[tauri::command]
+async fn webauthn_start_registration(username: String) -> Result<Value, String> {
+    println!("COS72-Tauri: 开始WebAuthn注册，用户名: {}", username);
+    webauthn::start_registration(&username)
+}
+
+// 完成注册流程
+#[tauri::command]
+async fn webauthn_finish_registration(user_id: String, response: String) -> Result<Value, String> {
+    println!("COS72-Tauri: 完成WebAuthn注册，用户ID: {}", user_id);
+    webauthn::finish_registration(&user_id, &response)
+}
+
+// 获取用户凭证
+#[tauri::command]
+async fn webauthn_get_credentials(user_id: String) -> Result<Value, String> {
+    println!("COS72-Tauri: 获取凭证，用户ID: {}", user_id);
+    webauthn::get_credentials(&user_id)
+}
+
+// 新增：初始化TEE环境 Tauri命令
+#[tauri::command]
+async fn initialize_tee() -> Result<bool, String> {
+    println!("COS72-Tauri: 正在初始化TEE环境...");
+    
+    match tee::initialize_tee().await {
+        Ok(result) => {
+            println!("COS72-Tauri: TEE初始化成功: {}", result);
+            Ok(result)
+        },
+        Err(e) => {
+            println!("COS72-Tauri: TEE初始化失败: {:?}", e);
+            Err(format!("TEE初始化失败: {:?}", e))
+        }
     }
 }
 
@@ -207,7 +342,7 @@ mod tests {
     #[tokio::test]
     async fn test_perform_tee_operation_parsing() {
         // 测试TEE环境不可用的情况
-        let result = perform_tee_operation(TeeOperation::CreateWallet).await;
+        let result = perform_tee_operation("CreateWallet".into()).await;
         assert!(result.is_err());
         
         // 如需其他测试，请根据修改后的API适配

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 // 导入新的API包装器，而不是直接使用@tauri-apps/api
-import { invoke as invokeCommand, isTauriEnvironment } from '../lib/tauri-api';
+import { invoke as invokeCommand, isTauriEnvironment, waitForTauriAPI, refreshTauriAPI } from '../lib/tauri-api';
 
 // 硬件信息接口
 interface HardwareInfo {
@@ -42,20 +42,25 @@ export default function Home() {
 
   // 检测环境
   useEffect(() => {
-    const env = isTauriEnvironment() ? 'Tauri 应用' : '网页浏览器';
-    console.log(`检测到环境: ${env}`);
-    setEnvironment(env);
+    const checkEnvironment = async () => {
+      const isTauri = await isTauriEnvironment();
+      const env = isTauri ? 'Tauri 应用' : '网页浏览器';
+      console.log(`检测到环境: ${env}`);
+      setEnvironment(env);
 
-    // 检查window对象上的Tauri属性
-    if (typeof window !== 'undefined') {
-      console.log('window.__TAURI__存在:', !!window.__TAURI__);
-      console.log('window.__TAURI_IPC__类型:', typeof window.__TAURI_IPC__);
-      
-      // 在Tauri 2.0中，不再需要导入@tauri-apps/api/tauri
-      if (isTauriEnvironment()) {
-        console.log('在Tauri环境中运行，无需导入API');
+      // 检查window对象上的Tauri属性
+      if (typeof window !== 'undefined') {
+        console.log('window.__TAURI__存在:', !!window.__TAURI__);
+        console.log('window.__TAURI_IPC__类型:', typeof window.__TAURI_IPC__);
+        
+        // 在Tauri 2.0中，不再需要导入@tauri-apps/api/tauri
+        if (isTauri) {
+          console.log('在Tauri环境中运行，无需导入API');
+        }
       }
-    }
+    };
+    
+    checkEnvironment();
   }, []);
 
   // 检测硬件信息
@@ -65,9 +70,60 @@ export default function Home() {
         setIsLoading(true);
         console.log('开始检测硬件信息...');
         
+        // 等待Tauri API准备就绪
+        const isTauri = await isTauriEnvironment();
+        if (isTauri) {
+          console.log('检测到Tauri环境，等待API就绪...');
+          // 增加等待时间
+          const apiReady = await waitForTauriAPI(10000); // 增加到10秒
+          if (!apiReady) {
+            console.warn('等待Tauri API超时，将使用模拟数据');
+            setStatus('无法连接到Tauri API，使用模拟数据');
+          } else {
+            console.log('Tauri API已就绪，继续检测');
+            setStatus('API就绪，开始检测');
+          }
+        }
+        
+        // 添加更强大的重试机制
+        let retryCount = 0;
+        const maxRetries = 5; // 增加重试次数
+        let lastError: any = null;
+        
+        const attemptHardwareDetection = async (): Promise<HardwareInfo> => {
+          try {
+            console.log(`硬件检测尝试 ${retryCount + 1}/${maxRetries + 1}`);
+            
+            // 显示当前状态
+            setStatus(`正在检测硬件 (${retryCount + 1}/${maxRetries + 1})...`);
+            
+            const info = await invokeCommand('detect_hardware') as HardwareInfo;
+            console.log('硬件信息获取成功:', info);
+            return info;
+          } catch (error) {
+            lastError = error;
+            if (retryCount < maxRetries) {
+              retryCount++;
+              console.log(`硬件检测尝试 ${retryCount}/${maxRetries} 失败，等待后重试...`);
+              
+              // 如果是Tauri环境但API调用失败，尝试刷新API
+              if (isTauri) {
+                const refreshed = await refreshTauriAPI();
+                console.log(`API刷新${refreshed ? '成功' : '失败'}`);
+              }
+              
+              // 等待时间随重试次数增加
+              const waitTime = 500 * retryCount;
+              setStatus(`检测失败，${waitTime}ms后重试 (${retryCount}/${maxRetries})...`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+              return attemptHardwareDetection();
+            }
+            throw error;
+          }
+        };
+        
         try {
-          const info = await invokeCommand('detect_hardware') as HardwareInfo;
-          console.log('硬件信息获取成功:', info);
+          const info = await attemptHardwareDetection();
           setHardwareInfo(info);
           setStatus('硬件检测完成');
           
@@ -75,8 +131,27 @@ export default function Home() {
           if (info.tee.tee_type !== 'none') {
             console.log('检测到TEE支持，获取TEE状态...');
             try {
-              const teeStatusResult = await invokeCommand('get_tee_status');
-              console.log('TEE状态获取成功:', teeStatusResult);
+              // 同样添加重试机制
+              retryCount = 0;
+              const getTeeStatusWithRetry = async () => {
+                try {
+                  setStatus('获取TEE状态...');
+                  const teeStatusResult = await invokeCommand('get_tee_status');
+                  console.log('TEE状态获取成功:', teeStatusResult);
+                  return teeStatusResult;
+                } catch (error) {
+                  if (retryCount < 3) {
+                    retryCount++;
+                    const waitTime = 500 * retryCount;
+                    console.log(`TEE状态获取失败，${waitTime}ms后重试...`);
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                    return getTeeStatusWithRetry();
+                  }
+                  throw error;
+                }
+              };
+              
+              const teeStatusResult = await getTeeStatusWithRetry();
               setTeeStatus(teeStatusResult as TeeStatus);
             } catch (teeError) {
               console.error('获取TEE状态失败:', teeError);
@@ -87,6 +162,10 @@ export default function Home() {
           }
         } catch (hwError) {
           console.error('硬件信息查询失败:', hwError);
+          setStatus(`硬件检测失败: ${hwError instanceof Error ? hwError.message : String(hwError)}`);
+          setErrorDetails(
+            `尝试了${retryCount}次检测，但都失败了。\n最后一个错误: ${lastError instanceof Error ? lastError.message : String(lastError)}`
+          );
           throw hwError;
         }
       } catch (error) {
@@ -102,20 +181,78 @@ export default function Home() {
       }
     };
 
-    // 应用加载后检测硬件
-    checkHardware();
+    // 等待DOM加载完成后检测硬件
+    if (typeof window !== 'undefined') {
+      // 如果DOM已加载完成，立即执行
+      if (document.readyState === 'complete') {
+        checkHardware();
+      } else {
+        // 否则等待DOM加载完成
+        window.addEventListener('load', checkHardware);
+        return () => window.removeEventListener('load', checkHardware);
+      }
+    }
   }, []);
 
   // 处理挑战签名请求
   const handleChallengeSignature = async () => {
     try {
       setStatus('处理签名请求...');
+      setErrorDetails(null);
+      
+      // 确保API就绪
+      const isTauri = await isTauriEnvironment();
+      if (isTauri) {
+        console.log('Tauri环境中进行签名，确认API就绪状态...');
+        // 增加等待时间
+        const apiReady = await waitForTauriAPI(10000);
+        if (!apiReady) {
+          console.warn('Tauri API未就绪，使用模拟数据');
+          setStatus('API未就绪，使用模拟数据');
+        } else {
+          console.log('Tauri API已就绪，继续签名操作');
+        }
+      }
+      
       // 模拟挑战字符串 (base64)
       const challenge = 'SGVsbG8sIHRoaXMgaXMgYSB0ZXN0IGNoYWxsZW5nZQ==';
       
       console.log('发送签名请求，挑战值:', challenge);
-      const result = await invokeCommand('verify_passkey', { challenge });
-      console.log('签名请求返回结果:', result);
+      
+      // 添加重试机制
+      let retryCount = 0;
+      const maxRetries = 3;
+      let lastError: any = null;
+      
+      const attemptSignature = async () => {
+        try {
+          setStatus(`执行签名 (${retryCount + 1}/${maxRetries + 1})...`);
+          const result = await invokeCommand('verify_passkey', { challenge });
+          console.log('签名请求返回结果:', result);
+          return result;
+        } catch (error) {
+          lastError = error;
+          if (retryCount < maxRetries) {
+            retryCount++;
+            const waitTime = 500 * retryCount;
+            console.log(`签名尝试 ${retryCount}/${maxRetries} 失败，${waitTime}ms后重试...`);
+            
+            // 如果是Tauri环境但API调用失败，尝试刷新API
+            if (isTauri) {
+              const refreshed = await refreshTauriAPI();
+              console.log(`API刷新${refreshed ? '成功' : '失败'}`);
+            }
+            
+            setStatus(`签名失败，${waitTime}ms后重试 (${retryCount}/${maxRetries})...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            return attemptSignature();
+          }
+          throw error;
+        }
+      };
+      
+      // 执行签名操作
+      const result = await attemptSignature();
       
       // 处理不同格式的返回值
       if (typeof result === 'object' && result !== null) {
@@ -144,6 +281,16 @@ export default function Home() {
     }
     
     try {
+      // 确保API就绪
+      const isTauri = await isTauriEnvironment();
+      if (isTauri) {
+        const apiReady = await waitForTauriAPI(3000);
+        if (!apiReady) {
+          console.warn('Tauri API未就绪，使用模拟数据');
+          setStatus('API未就绪，使用模拟数据');
+        }
+      }
+      
       setStatus('正在初始化TEE环境...');
       const result = await invokeCommand('initialize_tee');
       if (result) {
@@ -163,6 +310,16 @@ export default function Home() {
   // 创建钱包
   const handleCreateWallet = async () => {
     try {
+      // 确保API就绪
+      const isTauri = await isTauriEnvironment();
+      if (isTauri) {
+        const apiReady = await waitForTauriAPI(3000);
+        if (!apiReady) {
+          console.warn('Tauri API未就绪，使用模拟数据');
+          setStatus('API未就绪，使用模拟数据');
+        }
+      }
+      
       setStatus('正在创建钱包...');
       const result = await invokeCommand('perform_tee_operation', { 
         operation: 'CreateWallet'
@@ -331,13 +488,16 @@ export default function Home() {
       </main>
 
       <footer className="text-center py-6 text-gray-600">
-        <p>COS72 - 社区操作系统 v0.2.6</p>
+        <p>COS72 - 社区操作系统 v0.2.10</p>
         <p className="mt-2">
           <Link href="/debug" className="text-blue-500 hover:text-blue-700 text-sm cursor-pointer mr-4">
             调试页面
           </Link>
-          <Link href="/test-passkey" className="text-blue-500 hover:text-blue-700 text-sm cursor-pointer">
+          <Link href="/test-passkey" className="text-blue-500 hover:text-blue-700 text-sm cursor-pointer mr-4">
             FIDO2测试
+          </Link>
+          <Link href="/passkey-server" className="text-blue-500 hover:text-blue-700 text-sm cursor-pointer">
+            Passkey模拟服务器
           </Link>
         </p>
       </footer>
