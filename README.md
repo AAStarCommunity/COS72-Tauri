@@ -222,3 +222,12 @@ Windows Hello同步：利用Windows WebAuthn API和Microsoft账户同步机制�
 添加平台特定代码来连接各系统的同步API
 提供统一的抽象层接口
 在用户界面中添加身份提供商选择
+
+### Raspberry
+https://github.com/OP-TEE/optee_os
+https://optee.readthedocs.io/en/latest/general/about.html
+使用TEE OS在树莓派，加载https://github.com/apache/incubator-teaclave-trustzone-sdk/tree/main/projects/web3，构建基础的硬件钱包应用，然后对外提供基于OP-TEE OS的安全服务接口
+
+### 边缘计算
+https://github.com/WasmEdge/WasmEdge
+这部分如何和rust服务结合？是否引入这个技术栈，提升系统能力和范围？
