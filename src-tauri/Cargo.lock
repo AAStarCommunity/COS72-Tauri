@@ -516,7 +516,7 @@ dependencies = [
 
 [[package]]
 name = "cos72-tauri"
-version = "0.4.1"
+version = "0.4.4"
 dependencies = [
  "async-trait",
  "base64 0.21.7",

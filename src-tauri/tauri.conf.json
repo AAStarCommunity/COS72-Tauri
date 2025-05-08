@@ -6,54 +6,77 @@
     "devUrl": "http://localhost:3000",
     "frontendDist": "../out"
   },
-  "productName": "COS72",
-  "version": "0.4.1",
   "identifier": "com.cos72.app",
-  "plugins": {},
-  "bundle": {
-    "active": true,
-    "targets": "all",
-    "publisher": "COS72 Team",
-    "category": "DeveloperTool",
-    "copyright": "© 2023 COS72 Team",
-    "icon": [
-      "icons/icon.png"
-    ],
-    "shortDescription": "COS72 Application",
-    "longDescription": "Tauri based COS72 (Community Operation System 72) application framework",
-    "externalBin": [],
-    "resources": [],
-    "windows": {
-      "certificateThumbprint": null,
-      "digestAlgorithm": "sha256",
-      "timestampUrl": ""
-    },
-    "macOS": {
-      "entitlements": "entitlements.plist",
-      "exceptionDomain": "",
-      "frameworks": [],
-      "providerShortName": null,
-      "signingIdentity": null,
-      "minimumSystemVersion": "10.15"
-    }
-  },
+  "productName": "COS72",
+  "version": "0.4.7",
   "app": {
     "security": {
-      "csp": null
+      "csp": {
+        "default-src": ["'self'"],
+        "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "connect-src": ["'self'", "https://api.example.com"],
+        "img-src": ["'self'", "data:", "asset:", "https://example.com"],
+        "worker-src": ["'self'", "blob:"]
+      }
     },
     "windows": [
       {
         "fullscreen": false,
-        "height": 700,
+        "height": 720,
         "resizable": true,
-        "title": "COS72",
-        "width": 900,
-        "dragDropEnabled": false,
+        "title": "COS72 Wallet",
+        "width": 1280,
         "center": true,
-        "decorations": true
+        "label": "main"
       }
     ],
-    "withGlobalTauri": false,
+    "withGlobalTauri": true,
     "macOSPrivateApi": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "DeveloperTool",
+    "copyright": "© 2023 COS72 Team",
+    "shortDescription": "COS72 Application",
+    "longDescription": "Tauri based COS72 (Community Operation System 72) application",
+    "macOS": {
+      "entitlements": null,
+      "exceptionDomain": "",
+      "frameworks": [],
+      "providerShortName": null,
+      "signingIdentity": null
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    },
+    "fs": {
+      "scope": {
+        "allow": ["$APPDATA/**", "$APPCONFIG/**", "$HOME/**"],
+        "deny": []
+      }
+    },
+    "window": {
+      "all": true
+    },
+    "http": {
+      "all": true,
+      "scope": ["https://api.example.com/*", "http://localhost:*/*"]
+    }
   }
 } 

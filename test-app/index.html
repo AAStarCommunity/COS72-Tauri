@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tauri API测试</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .status {
+            font-weight: bold;
+        }
+        .success {
+            color: green;
+        }
+        .error {
+            color: red;
+        }
+        .warning {
+            color: orange;
+        }
+        button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        pre {
+            background-color: #f4f4f4;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        #logs {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Tauri API 测试工具</h1>
+    
+    <div class="container">
+        <h2>环境信息</h2>
+        <div>
+            <span>Tauri环境: </span>
+            <span id="tauri-status" class="status">检测中...</span>
+        </div>
+        <div>
+            <span>window.__IS_TAURI_APP__: </span>
+            <span id="is-tauri-app" class="status">检测中...</span>
+        </div>
+        <div>
+            <span>window.__TAURI__: </span>
+            <span id="tauri-obj" class="status">检测中...</span>
+        </div>
+        <div>
+            <span>window.__TAURI_IPC__: </span>
+            <span id="tauri-ipc" class="status">检测中...</span>
+        </div>
+        <div>
+            <span>window.ipcNative: </span>
+            <span id="ipc-native" class="status">检测中...</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>API 测试</h2>
+        <button id="test-api">测试API连接</button>
+        <button id="test-hardware">测试硬件检测</button>
+        <button id="test-passkey">测试Passkey</button>
+        <div id="test-results" style="margin-top: 10px;">点击按钮开始测试</div>
+    </div>
+
+    <div class="container">
+        <h2>日志</h2>
+        <div id="logs"></div>
+    </div>
+
+    <script>
+        // 添加日志函数
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const entry = document.createElement('div');
+            entry.className = type;
+            const time = new Date().toLocaleTimeString();
+            entry.textContent = `[${time}] ${message}`;
+            logs.appendChild(entry);
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        // 环境检测
+        function checkEnvironment() {
+            log("开始检测环境...");
+            
+            // 检测__IS_TAURI_APP__
+            const isTauriStatus = document.getElementById('is-tauri-app');
+            if (typeof window.__IS_TAURI_APP__ !== 'undefined') {
+                isTauriStatus.textContent = window.__IS_TAURI_APP__ ? "是 ✅" : "否 ❌";
+                isTauriStatus.className = window.__IS_TAURI_APP__ ? "status success" : "status error";
+                log(`window.__IS_TAURI_APP__: ${window.__IS_TAURI_APP__}`);
+            } else {
+                isTauriStatus.textContent = "未定义 ❌";
+                isTauriStatus.className = "status error";
+                log("window.__IS_TAURI_APP__未定义");
+            }
+            
+            // 检测__TAURI__对象
+            const tauriObjStatus = document.getElementById('tauri-obj');
+            if (typeof window.__TAURI__ !== 'undefined') {
+                const hasInvoke = typeof window.__TAURI__.invoke === 'function';
+                tauriObjStatus.textContent = hasInvoke ? "可用 ✅" : "存在但无invoke方法 ⚠️";
+                tauriObjStatus.className = hasInvoke ? "status success" : "status warning";
+                log(`window.__TAURI__: ${hasInvoke ? '完全可用' : '存在但无invoke方法'}`);
+            } else {
+                tauriObjStatus.textContent = "未定义 ❌";
+                tauriObjStatus.className = "status error";
+                log("window.__TAURI__未定义");
+            }
+            
+            // 检测__TAURI_IPC__对象
+            const tauriIpcStatus = document.getElementById('tauri-ipc');
+            if (typeof window.__TAURI_IPC__ !== 'undefined') {
+                const hasPostMessage = typeof window.__TAURI_IPC__.postMessage === 'function';
+                tauriIpcStatus.textContent = hasPostMessage ? "可用 ✅" : "存在但无postMessage方法 ⚠️";
+                tauriIpcStatus.className = hasPostMessage ? "status success" : "status warning";
+                log(`window.__TAURI_IPC__: ${hasPostMessage ? '完全可用' : '存在但无postMessage方法'}`);
+            } else {
+                tauriIpcStatus.textContent = "未定义 ❌";
+                tauriIpcStatus.className = "status error";
+                log("window.__TAURI_IPC__未定义");
+            }
+            
+            // 检测ipcNative对象
+            const ipcNativeStatus = document.getElementById('ipc-native');
+            if (typeof window.ipcNative !== 'undefined') {
+                const hasPostMessage = typeof window.ipcNative.postMessage === 'function';
+                ipcNativeStatus.textContent = hasPostMessage ? "可用 ✅" : "存在但无postMessage方法 ⚠️";
+                ipcNativeStatus.className = hasPostMessage ? "status success" : "status warning";
+                log(`window.ipcNative: ${hasPostMessage ? '完全可用' : '存在但无postMessage方法'}`);
+            } else {
+                ipcNativeStatus.textContent = "未定义 ❌";
+                ipcNativeStatus.className = "status error";
+                log("window.ipcNative未定义");
+            }
+            
+            // 总体Tauri环境状态
+            const tauriStatus = document.getElementById('tauri-status');
+            if (window.__IS_TAURI_APP__ && typeof window.__TAURI__ !== 'undefined' && typeof window.__TAURI__.invoke === 'function') {
+                tauriStatus.textContent = "Tauri环境完全可用 ✅";
+                tauriStatus.className = "status success";
+                log("Tauri环境完全可用");
+            } else if (window.__IS_TAURI_APP__ || typeof window.__TAURI__ !== 'undefined') {
+                tauriStatus.textContent = "Tauri环境部分可用 ⚠️";
+                tauriStatus.className = "status warning";
+                log("Tauri环境部分可用");
+            } else {
+                tauriStatus.textContent = "非Tauri环境 ❌";
+                tauriStatus.className = "status error";
+                log("非Tauri环境");
+            }
+        }
+
+        // 测试API连接
+        document.getElementById('test-api').addEventListener('click', async () => {
+            const resultsElement = document.getElementById('test-results');
+            resultsElement.textContent = "正在测试API连接...";
+            log("测试API连接...");
+            
+            try {
+                if (typeof window.__TAURI__ !== 'undefined' && typeof window.__TAURI__.invoke === 'function') {
+                    const result = await window.__TAURI__.invoke('test_api_connection');
+                    resultsElement.textContent = `API连接成功: ${result}`;
+                    resultsElement.className = "success";
+                    log(`API连接成功: ${result}`, 'success');
+                } else {
+                    resultsElement.textContent = "API调用失败: __TAURI__.invoke方法不可用";
+                    resultsElement.className = "error";
+                    log("API调用失败: __TAURI__.invoke方法不可用", 'error');
+                }
+            } catch (error) {
+                resultsElement.textContent = `API调用出错: ${error.message}`;
+                resultsElement.className = "error";
+                log(`API调用出错: ${error.message}`, 'error');
+            }
+        });
+
+        // 测试硬件检测
+        document.getElementById('test-hardware').addEventListener('click', async () => {
+            const resultsElement = document.getElementById('test-results');
+            resultsElement.textContent = "正在检测硬件...";
+            log("测试硬件检测...");
+            
+            try {
+                if (typeof window.__TAURI__ !== 'undefined' && typeof window.__TAURI__.invoke === 'function') {
+                    const hardware = await window.__TAURI__.invoke('detect_hardware');
+                    resultsElement.innerHTML = `<pre>${JSON.stringify(hardware, null, 2)}</pre>`;
+                    log("硬件检测成功", 'success');
+                } else {
+                    resultsElement.textContent = "硬件检测失败: __TAURI__.invoke方法不可用";
+                    resultsElement.className = "error";
+                    log("硬件检测失败: __TAURI__.invoke方法不可用", 'error');
+                }
+            } catch (error) {
+                resultsElement.textContent = `硬件检测出错: ${error.message}`;
+                resultsElement.className = "error";
+                log(`硬件检测出错: ${error.message}`, 'error');
+            }
+        });
+
+        // 测试Passkey
+        document.getElementById('test-passkey').addEventListener('click', async () => {
+            const resultsElement = document.getElementById('test-results');
+            resultsElement.textContent = "正在测试Passkey...";
+            log("测试Passkey...");
+            
+            try {
+                if (typeof window.__TAURI__ !== 'undefined' && typeof window.__TAURI__.invoke === 'function') {
+                    // 首先测试是否支持WebAuthn
+                    const supported = await window.__TAURI__.invoke('webauthn_supported');
+                    
+                    if (supported) {
+                        // 测试生物识别支持
+                        const biometricSupported = await window.__TAURI__.invoke('webauthn_biometric_supported');
+                        
+                        resultsElement.innerHTML = `
+                            <div>WebAuthn支持: ${supported ? '✅' : '❌'}</div>
+                            <div>生物识别支持: ${biometricSupported ? '✅' : '❌'}</div>
+                        `;
+                        log(`Passkey测试: WebAuthn支持=${supported}, 生物识别支持=${biometricSupported}`, 'success');
+                    } else {
+                        resultsElement.textContent = "Passkey测试: WebAuthn不支持";
+                        log("Passkey测试: WebAuthn不支持", 'warning');
+                    }
+                } else {
+                    resultsElement.textContent = "Passkey测试失败: __TAURI__.invoke方法不可用";
+                    resultsElement.className = "error";
+                    log("Passkey测试失败: __TAURI__.invoke方法不可用", 'error');
+                }
+            } catch (error) {
+                resultsElement.textContent = `Passkey测试出错: ${error.message}`;
+                resultsElement.className = "error";
+                log(`Passkey测试出错: ${error.message}`, 'error');
+            }
+        });
+
+        // 初始化
+        window.addEventListener('DOMContentLoaded', () => {
+            log("页面加载完成");
+            
+            // 等待一下再检测环境，确保Tauri API有时间初始化
+            setTimeout(checkEnvironment, 1000);
+            
+            // 添加事件监听器，监听API就绪事件
+            window.addEventListener('tauri-api-ready', () => {
+                log("收到tauri-api-ready事件", 'success');
+                checkEnvironment();
+            });
+        });
+    </script>
+</body>
+</html> 

@@ -1,54 +1,85 @@
 // 导入Testing Library的自定义匹配器
 import '@testing-library/jest-dom';
 
-// 模拟Tauri API
-jest.mock('@tauri-apps/api/tauri', () => ({
+// jest.setup.js
+global.window = global;
+
+// 模拟Tauri API，不再依赖@tauri-apps/api/tauri
+jest.mock('./src/lib/tauri-api', () => ({
   invoke: jest.fn().mockImplementation(async (cmd, args) => {
     // 默认模拟数据
     const mockData = {
       detect_hardware: {
         cpu: {
-          architecture: 'x86_64',
-          model_name: 'Mock CPU',
+          architecture: "arm64",
+          model_name: "Apple M1",
           cores: 8,
-          is_arm: false
+          is_arm: true
         },
-        memory: 16384,
+        memory: 17179869184, // 16GB
         tee: {
+          tee_type: "secure_enclave",
           sgx_supported: false,
           trustzone_supported: false,
-          secure_enclave_supported: false,
-          tee_type: 'none'
+          secure_enclave_supported: true
         }
       },
-      get_cpu_info: {
-        architecture: 'x86_64',
-        model_name: 'Mock CPU',
-        cores: 8,
-        is_arm: false
+      get_tee_status: {
+        available: true,
+        initialized: false,
+        type_name: "Apple Secure Enclave",
+        version: "1.0",
+        wallet_created: false
       },
-      check_tee_support: {
-        sgx_supported: false,
-        trustzone_supported: false,
-        secure_enclave_supported: false,
-        tee_type: 'none'
-      },
-      get_challenge_signature: 'mock_signature_data',
-      download_tee_plugin: true,
-      verify_plugin_hash: true,
+      test_api_connection: "API连接正常工作，版本0.4.7"
     };
 
-    // 根据命令返回不同的模拟数据
-    if (cmd in mockData) {
-      return mockData[cmd];
-    }
-    
-    return null;
+    // 返回对应命令的模拟数据
+    return mockData[cmd] || { success: true, message: "Operation completed" };
+  }),
+  isTauriEnvironment: jest.fn().mockReturnValue(false),
+  waitForTauriApi: jest.fn().mockResolvedValue(false),
+  refreshTauriApi: jest.fn().mockResolvedValue(false),
+  detectHardware: jest.fn().mockImplementation(async () => {
+    return {
+      cpu: {
+        architecture: "arm64",
+        model_name: "Apple M1",
+        cores: 8,
+        is_arm: true
+      },
+      memory: 17179869184, // 16GB
+      tee: {
+        tee_type: "secure_enclave",
+        sgx_supported: false,
+        trustzone_supported: false,
+        secure_enclave_supported: true
+      }
+    };
+  }),
+  getTeeStatus: jest.fn().mockResolvedValue({
+    available: true,
+    initialized: false,
+    type_name: "Apple Secure Enclave",
+    version: "1.0",
+    wallet_created: false
   })
 }));
 
-// 模拟window API
-jest.mock('@tauri-apps/api/window', () => ({
+// 全局模拟
+global.fetch = jest.fn(() =>
+  Promise.resolve({
+    json: () => Promise.resolve({}),
+    text: () => Promise.resolve(""),
+    ok: true
+  })
+);
+
+// 模拟窗口对象
+global.__IS_TAURI_APP__ = false;
+
+// 模拟window API - 不再依赖@tauri-apps/api/window
+jest.mock('./src/lib/tauri-window', () => ({
   appWindow: {
     close: jest.fn(),
     maximize: jest.fn(),

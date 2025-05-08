@@ -4,6 +4,7 @@ import Link from 'next/link';
 // 导入新的API包装器，而不是直接使用@tauri-apps/api
 import { invoke as invokeCommand, isTauriEnvironment, waitForTauriApi } from '../lib/tauri-api';
 import Layout from '../components/Layout';
+import TauriApiStatus from '../components/TauriApiStatus';
 
 // 硬件信息接口
 interface HardwareInfo {
@@ -31,7 +32,7 @@ interface TeeStatus {
   wallet_created: boolean;
 }
 
-export default function Home() {
+export default function Home({ tauriApiReady }: { tauriApiReady?: boolean }) {
   const [greeting, setGreeting] = useState('欢迎使用 COS72 应用');
   const [status, setStatus] = useState('初始化中...');
   const [hardwareInfo, setHardwareInfo] = useState<HardwareInfo | null>(null);
@@ -346,148 +347,140 @@ export default function Home() {
   };
 
   return (
-    <Layout environment={environment}>
+    <Layout>
       <Head>
-        <title>COS72 - Community OS</title>
-        <meta name="description" content="COS72 - Community OS, secure, private, efficient" />
+        <title>COS72</title>
+        <meta name="description" content="COS72 应用" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
-
-      {/* 主内容区域 */}
-      <div className="space-y-6">
+      
+      <main className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold text-center mb-8">{greeting}</h1>
         
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        {/* 添加Tauri API状态组件 */}
+        <div className="mb-8">
+          <TauriApiStatus tauriApiReady={tauriApiReady} />
+        </div>
+        
+        <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-8">
           <h2 className="text-xl font-semibold mb-4">系统状态</h2>
-          <p className="mb-2">{status}</p>
-          <p className="text-sm text-gray-500 mb-4">运行环境: {environment}</p>
           
-          {/* 调试按钮 */}
-          <div className="mb-4 flex justify-end">
-            <button 
-              onClick={toggleDebug}
-              className="text-xs px-2 py-1 bg-gray-200 hover:bg-gray-300 rounded"
-            >
-              {showDebug ? '隐藏调试信息' : '显示调试信息'}
-            </button>
+          <div className="mb-4">
+            <div className="font-medium">运行环境: <span className="font-normal">{environment}</span></div>
+            <div className="font-medium">当前状态: <span className="font-normal">{status}</span></div>
           </div>
           
-          {/* 错误详情 */}
-          {errorDetails && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 mb-4">
-              <p className="font-semibold">错误详情:</p>
-              <pre className="text-xs mt-1 whitespace-pre-wrap">{errorDetails}</pre>
-            </div>
-          )}
-          
-          {/* 调试信息 */}
-          {showDebug && (
-            <div className="p-3 bg-gray-50 border border-gray-200 rounded text-gray-700 mb-4">
-              <p className="font-semibold">调试信息:</p>
-              <ul className="text-xs mt-1">
-                <li>运行环境: {environment}</li>
-                <li>window.__TAURI__: {typeof window !== 'undefined' ? String(!!window.__TAURI__) : 'undefined'}</li>
-                <li>window.__TAURI_IPC__: {typeof window !== 'undefined' ? typeof window.__TAURI_IPC__ : 'undefined'}</li>
-                <li>isTauriEnvironment(): {String(isTauriEnvironment())}</li>
-                <li>User Agent: {typeof navigator !== 'undefined' ? navigator.userAgent : 'undefined'}</li>
-              </ul>
-            </div>
-          )}
-          
-          {isLoading ? (
-            <div className="flex justify-center my-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-            </div>
-          ) : hardwareInfo ? (
-            <div className="mt-4">
-              <h3 className="font-medium mb-2">硬件信息</h3>
-              <div className="bg-gray-50 p-4 rounded">
-                <p><span className="font-medium">CPU:</span> {hardwareInfo.cpu.model_name}</p>
-                <p><span className="font-medium">架构:</span> {hardwareInfo.cpu.architecture} 
-                  {hardwareInfo.cpu.is_arm && <span className="ml-2 text-green-600 font-medium">(ARM)</span>}
-                </p>
-                <p><span className="font-medium">核心数:</span> {hardwareInfo.cpu.cores}</p>
-                <p><span className="font-medium">内存:</span> {hardwareInfo.memory} MB</p>
-                <p><span className="font-medium">TEE 支持:</span> {hardwareInfo.tee.tee_type !== 'none' 
-                  ? <span className="text-green-600">是 ({hardwareInfo.tee.tee_type})</span> 
-                  : <span className="text-red-600">否</span>}
-                </p>
-              </div>
-              
-              {teeStatus && (
-                <div className="mt-4">
-                  <h3 className="font-medium mb-2">TEE 状态</h3>
-                  <div className="bg-gray-50 p-4 rounded">
-                    <p><span className="font-medium">可用:</span> {teeStatus.available ? '是' : '否'}</p>
-                    <p><span className="font-medium">已初始化:</span> {teeStatus.initialized ? '是' : '否'}</p>
-                    <p><span className="font-medium">类型:</span> {teeStatus.type_name}</p>
-                    <p><span className="font-medium">版本:</span> {teeStatus.version}</p>
-                    <p><span className="font-medium">钱包已创建:</span> {teeStatus.wallet_created ? '是' : '否'}</p>
-                    
-                    {!teeStatus.initialized && hardwareInfo.tee.tee_type !== 'none' && (
-                      <button 
-                        onClick={handleInitializeTee}
-                        className="mt-2 bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 text-sm rounded"
-                      >
-                        初始化TEE
-                      </button>
-                    )}
-                    
-                    {teeStatus.initialized && !teeStatus.wallet_created && (
-                      <button 
-                        onClick={handleCreateWallet}
-                        className="mt-2 bg-green-500 hover:bg-green-600 text-white py-1 px-3 text-sm rounded"
-                      >
-                        创建钱包
-                      </button>
-                    )}
+          {/* 现有的硬件信息显示 */}
+          {hardwareInfo && (
+            <div className="mb-4">
+              <h3 className="text-lg font-medium mb-2">硬件信息</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <div className="font-medium">CPU:</div>
+                  <div className="ml-4 text-sm">
+                    <div>架构: {hardwareInfo.cpu.architecture}</div>
+                    <div>型号: {hardwareInfo.cpu.model_name}</div>
+                    <div>核心数: {hardwareInfo.cpu.cores}</div>
+                    <div>ARM架构: {hardwareInfo.cpu.is_arm ? '是' : '否'}</div>
                   </div>
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700">
-              <p className="font-semibold">无法获取硬件信息</p>
-              <p className="text-sm mt-1">请检查应用权限和系统状态</p>
-              <button 
-                onClick={() => window.location.reload()}
-                className="mt-2 bg-red-500 hover:bg-red-600 text-white py-1 px-3 text-sm rounded"
-              >
-                重试
-              </button>
+                <div>
+                  <div className="font-medium">内存:</div>
+                  <div className="ml-4 text-sm">{(hardwareInfo.memory / 1024 / 1024 / 1024).toFixed(2)} GB</div>
+                  
+                  <div className="font-medium mt-2">可信执行环境 (TEE):</div>
+                  <div className="ml-4 text-sm">
+                    <div>类型: {hardwareInfo.tee.tee_type}</div>
+                    <div>SGX: {hardwareInfo.tee.sgx_supported ? '支持' : '不支持'}</div>
+                    <div>TrustZone: {hardwareInfo.tee.trustzone_supported ? '支持' : '不支持'}</div>
+                    <div>Secure Enclave: {hardwareInfo.tee.secure_enclave_supported ? '支持' : '不支持'}</div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">生物识别签名</h2>
-            <p className="mb-4">使用FIDO2/Passkey进行生物识别签名</p>
-            <button 
+          
+          {/* 现有的TEE状态显示 */}
+          {teeStatus && (
+            <div className="mb-4">
+              <h3 className="text-lg font-medium mb-2">TEE状态</h3>
+              <div className="ml-4 text-sm">
+                <div>可用: {teeStatus.available ? '是' : '否'}</div>
+                <div>已初始化: {teeStatus.initialized ? '是' : '否'}</div>
+                <div>类型: {teeStatus.type_name}</div>
+                <div>版本: {teeStatus.version}</div>
+                <div>钱包已创建: {teeStatus.wallet_created ? '是' : '否'}</div>
+              </div>
+            </div>
+          )}
+          
+          {/* 现有的操作按钮 */}
+          <div className="flex flex-wrap gap-2 mt-6">
+            <button
               onClick={handleChallengeSignature}
-              className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded"
+              disabled={isLoading}
+              className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded disabled:bg-gray-400"
             >
-              测试签名
+              签名挑战
             </button>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">TEE插件</h2>
-            {hardwareInfo?.cpu?.is_arm ? (
-              <>
-                <p className="text-green-600 mb-2">检测到ARM架构，支持TEE插件</p>
-                <Link href="/plugins" className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded inline-block cursor-pointer">
-                  下载TEE插件
-                </Link>
-              </>
-            ) : (
-              <p className="text-yellow-600">
-                当前设备不是ARM架构，无法使用TEE插件
-              </p>
+            
+            {teeStatus && !teeStatus.initialized && (
+              <button
+                onClick={handleInitializeTee}
+                disabled={isLoading}
+                className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded disabled:bg-gray-400"
+              >
+                初始化TEE
+              </button>
+            )}
+            
+            {teeStatus && teeStatus.initialized && !teeStatus.wallet_created && (
+              <button
+                onClick={handleCreateWallet}
+                disabled={isLoading}
+                className="bg-purple-500 hover:bg-purple-600 text-white py-2 px-4 rounded disabled:bg-gray-400"
+              >
+                创建钱包
+              </button>
             )}
           </div>
         </div>
-      </div>
+        
+        {/* 错误详情部分 */}
+        {errorDetails && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 rounded-lg mb-8">
+            <h3 className="text-lg font-medium text-red-800 dark:text-red-400 mb-2">错误详情</h3>
+            <pre className="text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap font-mono bg-red-100/50 dark:bg-red-900/50 p-2 rounded">
+              {errorDetails}
+            </pre>
+          </div>
+        )}
+        
+        {/* 开发者调试按钮 */}
+        <div className="text-center mb-4">
+          <button
+            onClick={toggleDebug}
+            className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+          >
+            {showDebug ? '隐藏调试信息' : '显示调试信息'}
+          </button>
+        </div>
+        
+        {/* 调试信息 */}
+        {showDebug && typeof window !== 'undefined' && (
+          <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-lg mb-8">
+            <h3 className="text-lg font-medium mb-2">调试信息</h3>
+            <pre className="text-xs font-mono whitespace-pre-wrap overflow-x-auto bg-gray-200 dark:bg-gray-800 p-2 rounded">
+              {`环境: ${environment}
+状态: ${status}
+Tauri API就绪: ${tauriApiReady ? '是' : '否'}
+window.__IS_TAURI_APP__: ${String(Boolean(window.__IS_TAURI_APP__))}
+window.__TAURI__: ${typeof window.__TAURI__ !== 'undefined' ? '存在' : '不存在'}
+window.__TAURI_IPC__: ${typeof window.__TAURI_IPC__ !== 'undefined' ? '存在' : '不存在'}`}
+            </pre>
+          </div>
+        )}
+      </main>
     </Layout>
   );
 } 

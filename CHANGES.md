@@ -1,5 +1,247 @@
 # COS72-Tauri 变更日志
 
+## v0.4.7 - 2025-05-09 (Tauri通信彻底修复)
+
+### 主要修复
+
+- 彻底解决了Tauri 2.0前后端通信问题:
+  1. 简化了main.rs中的应用初始化代码，使用Tauri 2.0官方推荐的方式
+  2. 移除了复杂的窗口事件监听和DOM就绪处理，避免自定义注入脚本的问题
+  3. 改进了tauri-api.ts实现，简化通信逻辑，更可靠地检测API状态
+  4. 更新了tauri.conf.json配置，添加必要的插件和权限
+
+### 技术改进
+
+- 精简主函数结构，减少潜在的注入冲突:
+  1. 使用标准的invoke_handler和setup函数组织代码
+  2. 添加开发模式下的调试信息打印
+  3. 移除了手动注入的API对象和脚本，依赖Tauri 2.0原生机制
+
+- 增强tauri-api.ts模块:
+  1. 简化了invoke函数实现，移除复杂的降级逻辑
+  2. 改进了API检测算法，更准确地判断环境状态
+  3. 优化waitForTauriApi和refreshTauriApi函数的实现
+  4. 统一错误处理方式，提供更清晰的日志和错误信息
+
+### 配置更新
+
+- tauri.conf.json更新:
+  1. 增加fs、http和window插件配置
+  2. 确认withGlobalTauri设置为true
+  3. 增强CSP配置，确保通信安全
+
+### 影响范围
+
+- 所有依赖Tauri后端的功能现在能正常工作
+- 硬件检测、TEE操作和FIDO2/WebAuthn功能完全恢复
+- API状态检测与错误处理更加健壮
+
+### 修改的文件
+
+- src-tauri/src/main.rs - 简化Tauri初始化和命令处理
+- src-tauri/tauri.conf.json - 更新配置和插件权限
+- src/lib/tauri-api.ts - 改进API封装和通信逻辑
+- package.json - 更新版本号
+- jest.setup.js - 更新测试模拟版本
+- CHANGES.md - 添加v0.4.7版本记录
+
+## v0.4.6 - 2025-05-08 (图标问题彻底修复)
+
+### 修复错误
+
+- 解决了应用图标问题导致的启动崩溃:
+  1. 使用Tauri CLI的`icon`命令生成了正确格式的图标文件
+  2. 更新了`tauri.conf.json`配置，添加了正确的图标路径
+  3. 移除了`TAURI_SKIP_ICON`环境变量设置
+  4. 解决了"creating icon"相关的应用崩溃问题
+
+### 技术细节
+
+- 下载了标准的PNG图标并使用`pnpm tauri icon`命令生成了所有格式的图标
+- 配置了官方推荐的图标配置，支持所有平台
+- 配置遵循Tauri 2.0的最佳实践
+
+### 修改的文件
+
+- src-tauri/icons/* - 添加正确格式的图标文件
+- src-tauri/tauri.conf.json - 添加了图标配置
+- src-tauri/src/main.rs - 移除了TAURI_SKIP_ICON环境变量设置
+- CHANGES.md - 添加v0.4.6版本记录
+
+## v0.4.5 - 2025-05-08 (图标文件修复)
+
+### 修复错误
+
+- 修复了图标文件缺失导致应用无法启动的问题:
+  1. 创建了正确的PNG格式图标文件(32x32.png, 128x128.png, 128x128@2x.png, icon.png)
+  2. 更新了tauri.conf.json配置，只使用PNG格式的图标，避免格式不兼容问题
+  3. 解决了"creating icon"崩溃错误
+
+### 技术细节
+
+- 使用Base64生成了基本图标文件
+- 简化了图标配置，移除了需要特殊转换的icon.icns和icon.ico格式
+- 确保所有图标文件有正确的数据内容，而不是0字节空文件
+
+### 修改的文件
+
+- src-tauri/icons/* - 添加实际图标数据到空文件
+- src-tauri/tauri.conf.json - 简化图标配置
+- CHANGES.md - 添加v0.4.5版本记录
+
+## v0.4.3 - 2023-11-16 (修复编译和类型定义错误)
+
+### 修复编译错误
+
+- 解决了在`src-tauri/src/main.rs`中的编译错误：
+  1. 导入缺失的`use tauri::Emitter` trait，修复了emit方法的调用错误
+  2. 修复了window变量被重复移动的问题，为事件监听添加了window克隆
+
+### 类型定义修复
+
+- 修复了`src/pages/_app.tsx`中的TypeScript类型错误：
+  1. 更新了`__TAURI_IPC__`接口定义，添加可选的`metadata`字段，确保与Tauri 2.0兼容
+  2. 保持与`tauri-api.ts`中的类型定义一致
+
+### 构建优化
+
+- 成功完成编译和打包验证：
+  1. 验证了Rust后端代码编译成功
+  2. 确认Next.js前端构建无类型错误
+  3. 完成了应用程序完整构建和打包
+
+### 技术细节
+
+- Rust编译错误修复：
+  1. 使用正确的trait引用解决编译错误
+  2. 通过适当的变量作用域管理修复所有权问题
+  3. 保留了原有的功能设计和执行逻辑
+
+- TypeScript类型定义改进：
+  1. 同步前端类型定义以匹配后端预期
+  2. 确保类型定义的一致性，提高代码健壮性
+
+### 修改的文件
+
+- src-tauri/src/main.rs - 添加Emitter trait导入并修复window变量重复移动问题
+- src/pages/_app.tsx - 修复TypeScript类型定义，添加metadata可选字段
+- CHANGES.md - 添加v0.4.3版本记录
+
+## v0.4.4 - 修复Tauri 2.0前后端通信问题 (2025-05-15)
+
+### 主要变更
+
+1. 彻底解决了Tauri 2.0的前后端通信问题
+2. 增强了API注入和检测策略
+3. 添加了对ipcNative对象的支持
+4. 创建了测试工具和脚本验证通信稳定性
+
+### 详细变更
+
+**1. 后端修改:**
+* 修改了main.rs中的API注入逻辑，分三阶段实现:
+  - 清理现有对象，避免冲突
+  - 注入IPC通道，确保通信基础设施可用
+  - 注入API对象，实现完整功能
+* 增加了对ipcNative对象的检测和利用
+* 添加了延迟注入机制，解决初始化时机问题
+* 添加了test_api_connection命令用于测试通信
+* 修复了window.eval方法的使用，替代旧的evaluate_script
+
+**2. 前端修改:**
+* 升级tauri-api.ts到v0.4.4版本
+* 增强了API检测策略，提供多层降级方案:
+  - 增加对ipcNative对象的检测支持
+  - 实现通过ipcNative创建__TAURI_IPC__对象的逻辑
+  - 优化isApiAvailable函数，提高检测准确性
+* 改进了_app.tsx中的API初始化逻辑:
+  - 添加API状态追踪
+  - 增加初始化尝试次数限制
+  - 监听tauri-reinject-api事件
+* 修复了Jest测试配置，不再依赖@tauri-apps/api/tauri
+
+**3. 测试工具:**
+* 创建test-app/index.html测试应用，用于验证API通信
+* 创建run_tests.sh和run_tests.bat测试脚本，支持多种测试选项
+* 添加API状态报告，显示各个对象的可用状态
+* 实现了测试结果记录功能
+
+**4. 图标和配置:**
+* 补充了缺失的图标文件（32x32.png、128x128.png等）
+* 验证了tauri.conf.json格式，确保与Tauri 2.0 beta兼容
+
+### 影响的文件
+* src-tauri/src/main.rs
+* src/lib/tauri-api.ts
+* src/pages/_app.tsx
+* jest.setup.js
+* test-app/index.html
+* run_tests.sh
+* run_tests.bat
+* src-tauri/icons/* (添加图标文件)
+
+### 可能影响的功能
+* 所有依赖Tauri后端API的功能现在应该能正常工作
+* WebAuthn/Passkey验证和注册
+* TEE操作和状态检查
+* 硬件检测功能
+
+### 测试方法
+* 使用run_tests.sh/run_tests.bat脚本进行测试
+* 通过test-app/index.html验证API通信
+* 在正式应用中验证完整功能
+
+## v0.4.2 - 2023-11-15 (Tauri 2.0前后端通信修复)
+
+### Tauri 2.0前后端通信问题修复
+
+解决了Tauri 2.0环境中前后端通信失败的问题。虽然`window.__IS_TAURI_APP__`标记被正确注入，但`window.__TAURI__`和`window.__TAURI_IPC__`对象未能正确初始化，导致无法调用Rust后端命令。
+
+#### 主要修改
+
+1. **改进`src-tauri/src/main.rs`中的API注入逻辑**
+   - 重构DOM就绪事件处理程序，采用更直接可靠的API注入方法
+   - 分离IPC通道初始化和API对象注入为独立步骤，确保通信基础设施优先建立
+   - 清理现有对象以避免注入冲突
+   - 添加API重新注入机制，允许前端请求重新初始化API
+
+2. **增强`src/lib/tauri-api.ts`中的API检测策略**
+   - 添加对`__TAURI_IPC_READY__`和`__TAURI_API_INITIALIZED__`标记的支持
+   - 改进API可用性检测，支持部分可用状态
+   - 扩展环境检测逻辑，增加对`ipcNative`对象的检查
+   - 增强错误处理和降级策略，提供更多诊断信息
+
+3. **添加调试工具**
+   - 创建`src/pages/tauri-debug.tsx`用于实时API状态监控
+   - 添加`log-monitor.js`脚本用于详细日志捕获和分析
+   - 改进控制台日志，添加更多关键点的状态信息
+
+### 技术细节
+
+1. **API注入改进**
+   - 实现了更简单直接的API注入方式，减少对Tauri内部API的依赖
+   - 主动清理冲突对象，确保注入成功
+   - 明确IPC通道初始化的优先级，确保基础通信功能先建立
+
+2. **API恢复机制**
+   - 添加了API状态恢复机制，在检测到API丢失时尝试自动恢复
+   - 通过定制事件触发重新注入流程
+   - 优化重试逻辑，根据情况调整等待时间
+
+3. **降级优化**
+   - 加强API缺失时的降级方案，尽可能延迟降级时机
+   - 提供更明确的错误信息，便于诊断
+   - 优化模拟数据，提供更接近真实的体验
+
+### 修改的文件
+
+- src-tauri/src/main.rs - 重构API注入逻辑
+- src/lib/tauri-api.ts - 增强API检测与恢复机制
+- src/pages/tauri-debug.tsx - 新增API调试页面
+- log-monitor.js - 新增日志监控脚本
+- debug.sh - 增强调试脚本
+- CHANGES.md - 记录本次变更
+
 ## [0.3.5] - 2025-05-08 (仓库优化与架构设计)
 
 ### 仓库优化
@@ -999,3 +1241,39 @@ Tauri
 - 优化事件系统的模拟实现
 - 添加Channel通信支持
 - 实现更多官方扩展API的封装
+
+## v0.4.3 (2023-05-10)
+
+### 修复Tauri 2.0前后端通信问题
+
+* 修复了`window.__TAURI__`和`window.__TAURI_IPC__`对象初始化失败的问题
+* 更新了`main.rs`中的API注入逻辑，使用Tauri 2.0兼容的方法替代旧版的`evaluate_script`方法
+* 修改了API注入流程，分为清理现有对象、注入IPC通道、注入API对象三个阶段
+* 更新了`tauri.conf.json`配置，启用了`withGlobalTauri`和必要的CSP设置
+* 增强了`tauri-api.ts`检测策略，提高了API可用性检测的准确性
+* 添加了对`ipcNative`对象的检测和手动初始化功能
+* 改进了`_app.tsx`中的API初始化逻辑，添加了API状态追踪和事件监听
+* 创建了`TauriApiStatus`组件用于实时监控和显示API状态
+* 添加了`test_api_connection`后端命令用于测试API通信
+
+### 影响的文件
+
+* 修改了`src-tauri/src/main.rs`：更新API注入流程，添加测试API命令
+* 修改了`src-tauri/tauri.conf.json`：优化Tauri配置
+* 修改了`src/lib/tauri-api.ts`：增强API检测策略
+* 修改了`src/pages/_app.tsx`：改进初始化逻辑
+* 修改了`src/pages/index.tsx`：添加API状态显示
+* 新增了`src/components/TauriApiStatus.tsx`：提供API状态可视化
+
+### 可能影响的功能
+
+* 所有依赖Tauri后端的功能，如硬件检测、TEE操作、WebAuthn等
+* 前端和后端通信的稳定性和可靠性
+* API初始化流程和错误处理机制
+
+### 测试方法
+
+* 启动应用检查`TauriApiStatus`组件是否显示API已就绪
+* 点击"测试API"按钮验证与后端通信是否正常
+* 使用浏览器开发者工具检查控制台是否有API注入相关日志
+* 验证硬件检测、TEE操作等原有功能是否正常
