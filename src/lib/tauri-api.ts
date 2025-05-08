@@ -515,4 +515,45 @@ function debugLog(...args: any[]) {
 // 设置硬件类型（仅用于测试）
 export function setHardwareType(type: 'arm' | 'x86') {
   setMockHardwareType(type);
+}
+
+// 获取系统详细信息
+export async function getSystemInfo(): Promise<any> {
+  try {
+    return await invoke<any>('get_system_info');
+  } catch (error) {
+    console.error('[TAURI-API-0.4.7] - 获取系统信息失败', error);
+    // 返回一些基本信息作为降级选项
+    return {
+      hostname: 'unknown',
+      os_info: {
+        name: navigator.platform || 'unknown',
+        version: 'unknown',
+        kernel: 'unknown',
+        arch: navigator.userAgent.includes('ARM') ? 'arm' : 'x86'
+      },
+      cpu_info: {
+        model: 'Unknown CPU',
+        cores: navigator.hardwareConcurrency || 2,
+        threads: navigator.hardwareConcurrency || 2,
+        frequency: 0,
+        architecture: navigator.userAgent.includes('ARM') ? 'arm' : 'x86'
+      },
+      memory_info: {
+        total: 0,
+        available: 0,
+        used_percent: 0
+      },
+      disk_info: {
+        total: 0,
+        available: 0,
+        used_percent: 0
+      },
+      network_info: {
+        interface: 'unknown',
+        ip_address: 'unknown',
+        mac_address: 'unknown'
+      }
+    };
+  }
 } 

@@ -6,7 +6,7 @@ use crate::tee::adapter_interface::{TEEAdapter, TEEConnectionType};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use uuid::Uuid;
-use std::sync::Once;
+use std::sync::OnceLock;
 
 // Constants
 const TEE_TYPE_NAME: &str = "Teaclave TrustZone";
@@ -19,6 +19,9 @@ pub struct TeaclaveAdapter {
     wallet_id: Option<String>,
     connection_type: TEEConnectionType,
 }
+
+// Change static mut to OnceLock
+static WALLET_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
 
 #[async_trait]
 impl TEEAdapter for TeaclaveAdapter {
@@ -113,31 +116,26 @@ impl TeaclaveAdapter {
     
     // Get wallet data directory
     fn get_wallet_dir() -> Result<std::path::PathBuf, TeeError> {
-        // Use cache or temp directory to speed up access
-        static INIT: Once = Once::new();
-        static mut WALLET_DIR: Option<std::path::PathBuf> = None;
-        
-        unsafe {
-            // Initialize only once for performance
-            INIT.call_once(|| {
-                // Use temp directory as wallet data directory
-                let dir = std::env::temp_dir().join("cos72").join(TEE_WALLET_PATH);
-                
-                // Ensure directory exists
-                let _ = std::fs::create_dir_all(&dir);
-                
-                WALLET_DIR = Some(dir);
-            });
+        // Initialize if not already initialized
+        if WALLET_DIR.get().is_none() {
+            // Use temp directory as wallet data directory
+            let dir = std::env::temp_dir().join("cos72").join(TEE_WALLET_PATH);
             
-            // Return cached directory
-            if let Some(dir) = WALLET_DIR.as_ref() {
-                Ok(dir.clone())
-            } else {
-                // This shouldn't happen, but handle it anyway
-                let fallback_dir = std::env::temp_dir().join("cos72").join(TEE_WALLET_PATH);
-                let _ = std::fs::create_dir_all(&fallback_dir);
-                Ok(fallback_dir)
-            }
+            // Ensure directory exists
+            let _ = std::fs::create_dir_all(&dir);
+            
+            // Store the directory
+            let _ = WALLET_DIR.set(dir);
+        }
+        
+        // Return cached directory
+        if let Some(dir) = WALLET_DIR.get() {
+            Ok(dir.clone())
+        } else {
+            // This shouldn't happen, but handle it anyway
+            let fallback_dir = std::env::temp_dir().join("cos72").join(TEE_WALLET_PATH);
+            let _ = std::fs::create_dir_all(&fallback_dir);
+            Ok(fallback_dir)
         }
     }
 

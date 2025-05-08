@@ -7,6 +7,6 @@ pub mod biometric;  // 新增biometric子模块
 // 其他辅助或共享功能可在此添加 
 
 // 重新导出常用功能
-pub use webauthn::*;
-pub use passkey::*;
-pub use biometric::*; 
+// pub use webauthn::*;
+// pub use passkey::*;
+// pub use biometric::*; 

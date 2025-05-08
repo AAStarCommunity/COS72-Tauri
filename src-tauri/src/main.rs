@@ -7,10 +7,12 @@ mod hardware;
 mod fido;
 mod tee;
 mod plugin;
+mod demo;
 
 // 将biometric.rs添加到fido模块
 use fido::biometric;
 use hardware::detect;
+use hardware::system_info;
 use fido::webauthn;
 use tee::{TeeOperation, TeeResult};
 use serde_json::Value;
@@ -27,6 +29,7 @@ fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             detect_hardware,
+            get_system_info,
             verify_passkey,
             get_tee_status,
             perform_tee_operation,
@@ -39,7 +42,10 @@ fn main() {
             webauthn_finish_authentication,
             check_biometric_permission,
             request_biometric_permission,
-            test_api_connection
+            test_api_connection,
+            demo::echo_message,
+            demo::perform_calculation,
+            demo::start_long_operation
         ])
         .run(tauri::generate_context!())
         .expect("Tauri应用运行失败");
@@ -62,6 +68,23 @@ async fn detect_hardware() -> Result<Value, String> {
         Err(e) => {
             println!("COS72-Tauri: 硬件检测失败: {}", e);
             Err(format!("硬件检测失败: {}", e))
+        }
+    }
+}
+
+// 新增: 获取详细系统信息的API
+#[tauri::command]
+async fn get_system_info() -> Result<system_info::SystemInfo, String> {
+    println!("COS72-Tauri: 正在获取详细系统信息...");
+    
+    match system_info::get_system_info() {
+        Ok(info) => {
+            println!("COS72-Tauri: 系统信息获取成功");
+            Ok(info)
+        },
+        Err(e) => {
+            println!("COS72-Tauri: 系统信息获取失败: {}", e);
+            Err(format!("系统信息获取失败: {}", e))
         }
     }
 }

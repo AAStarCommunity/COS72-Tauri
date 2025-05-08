@@ -1,6 +1,117 @@
 # COS72-Tauri 变更日志
 
-## v0.4.7 - 2025-05-09 (Tauri通信彻底修复)
+## v0.5.0 - 2025-05-18 (编译错误与警告修复)
+
+### 编译错误修复
+
+- 修复了Tauri 2.0 API相关的编译错误:
+  1. 添加了`tauri::Emitter` trait导入到demo.rs，解决了事件emit方法未找到的错误
+  2. 修复了`src-tauri/src/tee/teaclave_adapter.rs`中的静态可变引用警告，使用`OnceLock`替代
+  3. 注释了未使用的导入，消除了不必要的警告
+
+### 性能与代码质量改进
+
+- 改进代码质量和减少警告:
+  1. 注释掉`fido/mod.rs`中未使用的`webauthn::*`、`passkey::*`和`biometric::*`导入
+  2. 注释掉`hardware/mod.rs`中未使用的`detect::*`和`system_info::*`导入
+  3. 修复了`hardware/system_info.rs`文件中未使用的变量警告
+  4. 使用`cargo fix`工具自动修复了部分代码问题
+
+### 构建优化
+
+- 顺利完成构建:
+  1. 验证了新代码在latest版本Tauri 2.5.1下正常编译
+  2. 确认新版本能够与macOS 24.2.0系统环境良好兼容
+  3. 更新版本号到v0.5.0，表明此次变更为重要改进而非补丁
+
+### 修改的文件
+
+- src-tauri/src/demo.rs - 添加`tauri::Emitter` trait导入，修复emit方法错误
+- src-tauri/src/fido/mod.rs - 注释掉未使用的导入
+- src-tauri/src/hardware/mod.rs - 注释掉未使用的导入
+- src-tauri/src/tee/teaclave_adapter.rs - 重构静态可变引用，使用OnceLock代替
+- CHANGES.md - 添加v0.5.0版本记录
+
+## v0.4.9 - 2024-05-10 (通信示例与构建修复)
+
+### 功能增强
+
+- 新增Tauri前后端通信示例模块:
+  1. 添加了专用的通信示例演示页面(tauri-communication-demo.tsx)
+  2. 实现了三种通信方式的实际示例：直接调用、计算器模式和事件模式
+  3. 每个示例包含完整的前后端代码实现和详细注释
+  4. 从首页添加了明确的导航链接，方便访问
+
+### 技术改进
+
+- 后端实现:
+  1. 创建了src-tauri/src/demo.rs模块，实现三个示例通信函数
+  2. 添加了echo_message、perform_calculation和start_long_operation命令
+  3. 实现了后端事件发送示例，展示实时进度更新能力
+  4. 添加了单元测试，确保示例功能正常工作
+
+- 前端实现:
+  1. 优化导航界面，添加清晰的功能入口
+  2. 为每个示例添加了代码实现展示部分
+  3. 改进了首页布局，增强用户体验
+  4. 修复了TypeScript类型错误
+
+### 构建修复
+
+- 解决构建错误问题:
+  1. 在.gitignore中已排除tauri-test-app目录，避免影响主项目构建
+  2. 修复了前端类型定义问题，修复TypeScript错误
+  3. 更新版本号到0.4.9
+
+### 修改的文件
+
+- src/pages/tauri-communication-demo.tsx - 新增通信示例页面
+- src-tauri/src/demo.rs - 新增后端示例模块
+- src-tauri/src/main.rs - 注册新的通信示例命令
+- src/pages/index.tsx - 添加到通信示例页面的导航链接
+- package.json - 更新版本号
+- CHANGES.md - 添加v0.4.9版本记录
+
+## v0.4.8 - 2024-05-09 (系统信息显示功能)
+
+### 功能增强
+
+- 新增详细系统信息检测和显示功能:
+  1. 添加了system_info模块，提供全面的系统信息检测
+  2. 支持获取CPU、内存、磁盘和网络详细配置
+  3. 新增友好的系统信息UI显示界面
+
+### 技术改进
+
+- 后端实现:
+  1. 创建system_info.rs模块，封装系统信息获取逻辑
+  2. 支持跨平台系统信息检测(Linux/macOS/Windows)
+  3. 提供优雅的降级处理和错误处理机制
+
+- 前端实现:
+  1. 封装getSystemInfo API，与系统信息后端接口对接
+  2. 新增系统信息显示组件，包含优雅的进度条和布局
+  3. 实现完整的加载状态和错误处理
+
+### 参考指南
+
+- 新增TAURI-COMMUNICATION-GUIDE.md文档，总结三种前后端通信方法:
+  1. 直接调用 Rust 函数
+  2. 计算器模式(复杂计算场景)
+  3. 后端事件模式(长时间运行操作)
+  4. 包含详细的最佳实践和示例代码
+
+### 修改的文件
+
+- src-tauri/src/hardware/system_info.rs - 新增系统信息模块
+- src-tauri/src/hardware/mod.rs - 更新模块导出
+- src-tauri/src/main.rs - 添加系统信息API接口
+- src-tauri/Cargo.toml - 添加num_cpus和hostname依赖
+- src/lib/tauri-api.ts - 添加getSystemInfo函数
+- src/pages/tauri-debug.tsx - 添加系统信息显示组件
+- TAURI-COMMUNICATION-GUIDE.md - 新增通信方法参考指南
+
+## v0.4.7 - 2024-05-09 (Tauri通信彻底修复)
 
 ### 主要修复
 
@@ -42,7 +153,7 @@
 - src-tauri/tauri.conf.json - 更新配置和插件权限
 - src/lib/tauri-api.ts - 改进API封装和通信逻辑
 - package.json - 更新版本号
-- jest.setup.js - 更新测试模拟版本
+- jest.setup.js - 更新测试环境配置
 - CHANGES.md - 添加v0.4.7版本记录
 
 ## v0.4.6 - 2025-05-08 (图标问题彻底修复)

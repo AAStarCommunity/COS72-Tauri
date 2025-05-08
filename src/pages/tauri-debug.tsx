@@ -1,267 +1,498 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
+import { 
+  isTauriEnvironment, 
+  detectHardware, 
+  getSystemInfo,  // 导入新的系统信息API
+  testApiConnection,
+  getTeeStatus
+} from '../lib/tauri-api';
 
-export default function TauriDebugPage() {
-  const [apiState, setApiState] = useState({
-    isChecking: true,
-    environmentInfo: {} as any,
-    apiDetails: {} as any,
-    errors: [] as string[],
-    logs: [] as string[]
-  });
+// Tauri环境检测组件
+const TauriEnvironmentCheck = () => {
+  const [isTauri, setIsTauri] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 添加日志拦截器
-    const originalConsoleLog = console.log;
-    const originalConsoleError = console.error;
-    const logHistory: string[] = [];
-
-    // 覆盖console.log
-    console.log = (...args) => {
-      originalConsoleLog(...args);
-      const logMessage = args.map(arg => 
-        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-      ).join(' ');
-      logHistory.push(`[Log] ${logMessage}`);
-      setApiState(prev => ({...prev, logs: [...logHistory]}));
+    const checkEnvironment = async () => {
+      try {
+        const result = await isTauriEnvironment();
+        setIsTauri(result);
+      } catch (error) {
+        console.error('环境检测失败:', error);
+        setIsTauri(false);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    // 覆盖console.error
-    console.error = (...args) => {
-      originalConsoleError(...args);
-      const errorMessage = args.map(arg => 
-        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-      ).join(' ');
-      logHistory.push(`[Error] ${errorMessage}`);
-      setApiState(prev => ({...prev, logs: [...logHistory]}));
-    };
-
-    // 检查Tauri环境状态
-    checkTauriEnvironment();
-
-    // 清理函数
-    return () => {
-      console.log = originalConsoleLog;
-      console.error = originalConsoleError;
-    };
+    checkEnvironment();
   }, []);
 
-  // 检查Tauri环境
-  const checkTauriEnvironment = () => {
-    try {
-      const envInfo = {
-        isTauriApp: Boolean(window.__IS_TAURI_APP__),
-        tauriExists: typeof window.__TAURI__ !== 'undefined',
-        tauriInvoke: typeof window.__TAURI__?.invoke === 'function',
-        tauriIpcExists: typeof window.__TAURI_IPC__ !== 'undefined',
-        tauriInternalsExists: typeof window.__TAURI_INTERNALS__ !== 'undefined',
-        userAgent: navigator.userAgent,
-        platform: navigator.platform,
-        timeOfCheck: new Date().toISOString()
-      };
-
-      // 获取详细的API信息
-      const apiDetails = {
-        tauriObjectKeys: typeof window.__TAURI__ !== 'undefined' ? Object.keys(window.__TAURI__) : [],
-        tauriIpcType: typeof window.__TAURI_IPC__,
-        tauriInternalsType: typeof window.__TAURI_INTERNALS__,
-        hasEventApi: typeof window.__TAURI__?.event !== 'undefined',
-        hasInvokeApi: typeof window.__TAURI__?.invoke !== 'undefined',
-        windowObjectLength: Object.keys(window).length
-      };
-
-      setApiState(prev => ({
-        ...prev,
-        isChecking: false,
-        environmentInfo: envInfo,
-        apiDetails: apiDetails
-      }));
-
-      console.log('环境检测完成', envInfo);
-    } catch (error) {
-      console.error('环境检测失败', error);
-      setApiState(prev => ({
-        ...prev,
-        isChecking: false,
-        errors: [...prev.errors, String(error)]
-      }));
-    }
-  };
-
-  // 尝试手动创建IPC通信
-  const attemptCreateIPC = () => {
-    try {
-      if (typeof window.__TAURI__ === 'undefined') {
-        window.__TAURI__ = {};
-        console.log('创建了空的 __TAURI__ 对象');
-      }
-
-      if (typeof window.__TAURI__.invoke !== 'function') {
-        window.__TAURI__.invoke = (cmd, args) => {
-          console.log(`模拟调用: ${cmd}`, args);
-          return Promise.resolve({ success: true, mock: true, command: cmd });
-        };
-        console.log('创建了模拟的 invoke 函数');
-      }
-
-      checkTauriEnvironment();
-    } catch (error) {
-      console.error('手动创建IPC失败', error);
-    }
-  };
-
-  // 请求重新注入API
-  const requestReinjectApi = () => {
-    try {
-      console.log('请求重新注入API');
-      window.dispatchEvent(new CustomEvent('tauri-reinject-api'));
-      
-      // 2秒后再次检查
-      setTimeout(() => {
-        checkTauriEnvironment();
-      }, 2000);
-    } catch (error) {
-      console.error('重新注入API请求失败', error);
-    }
-  };
-
-  // 清除日志
-  const clearLogs = () => {
-    setApiState(prev => ({...prev, logs: []}));
-  };
+  if (loading) {
+    return (
+      <div className="p-4 border rounded-lg bg-slate-50 my-4">
+        <h3 className="font-medium text-lg mb-2">Tauri环境检测</h3>
+        <div className="flex justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <Head>
-        <title>Tauri 调试工具</title>
-      </Head>
+    <div className={`p-4 border rounded-lg my-4 ${isTauri ? 'bg-green-50' : 'bg-red-50'}`}>
+      <h3 className="font-medium text-lg mb-2">Tauri环境检测</h3>
+      {isTauri ? (
+        <div className="text-green-700">
+          ✓ 当前在Tauri环境中运行
+        </div>
+      ) : (
+        <div className="text-red-700">
+          ✗ 当前不在Tauri环境中运行
+        </div>
+      )}
+    </div>
+  );
+};
 
-      <main className="container mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6">Tauri API 调试工具</h1>
+// 硬件检测组件
+const HardwareDetection = () => {
+  const [hardware, setHardware] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-        {apiState.isChecking ? (
-          <div className="text-center py-10">加载中...</div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* 环境信息卡片 */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-xl font-semibold mb-4">环境信息</h2>
-              <div className="space-y-2">
-                <div className={`p-2 rounded ${apiState.environmentInfo.isTauriApp ? 'bg-green-100' : 'bg-red-100'}`}>
-                  <span className="font-medium">是否Tauri环境: </span>
-                  {apiState.environmentInfo.isTauriApp ? '是 ✓' : '否 ✗'}
-                </div>
-                <div className={`p-2 rounded ${apiState.environmentInfo.tauriExists ? 'bg-green-100' : 'bg-red-100'}`}>
-                  <span className="font-medium">window.__TAURI__: </span>
-                  {apiState.environmentInfo.tauriExists ? '存在 ✓' : '不存在 ✗'}
-                </div>
-                <div className={`p-2 rounded ${apiState.environmentInfo.tauriInvoke ? 'bg-green-100' : 'bg-red-100'}`}>
-                  <span className="font-medium">window.__TAURI__.invoke: </span>
-                  {apiState.environmentInfo.tauriInvoke ? '可用 ✓' : '不可用 ✗'}
-                </div>
-                <div className={`p-2 rounded ${apiState.environmentInfo.tauriIpcExists ? 'bg-green-100' : 'bg-red-100'}`}>
-                  <span className="font-medium">window.__TAURI_IPC__: </span>
-                  {apiState.environmentInfo.tauriIpcExists ? '存在 ✓' : '不存在 ✗'}
-                </div>
-                <div className={`p-2 rounded ${apiState.environmentInfo.tauriInternalsExists ? 'bg-green-100' : 'bg-red-100'}`}>
-                  <span className="font-medium">window.__TAURI_INTERNALS__: </span>
-                  {apiState.environmentInfo.tauriInternalsExists ? '存在 ✓' : '不存在 ✗'}
-                </div>
-                <div className="p-2 rounded bg-gray-100">
-                  <span className="font-medium">User Agent: </span>
-                  <span className="text-xs font-mono">{apiState.environmentInfo.userAgent}</span>
-                </div>
-                <div className="p-2 rounded bg-gray-100">
-                  <span className="font-medium">检测时间: </span>
-                  {apiState.environmentInfo.timeOfCheck}
-                </div>
-              </div>
+  const detectHardwareInfo = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const info = await detectHardware();
+      console.log('硬件信息:', info);
+      setHardware(info);
+    } catch (err) {
+      console.error('硬件检测失败:', err);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-              <div className="mt-6 flex space-x-2">
-                <button 
-                  onClick={checkTauriEnvironment}
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                >
-                  重新检测
-                </button>
-                <button 
-                  onClick={attemptCreateIPC}
-                  className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600"
-                >
-                  尝试手动创建API
-                </button>
-                <button 
-                  onClick={requestReinjectApi}
-                  className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-                >
-                  请求重新注入API
-                </button>
-              </div>
-            </div>
+  useEffect(() => {
+    detectHardwareInfo();
+  }, []);
 
-            {/* API详情卡片 */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-xl font-semibold mb-4">API详情</h2>
-              
-              {apiState.apiDetails.tauriObjectKeys && apiState.apiDetails.tauriObjectKeys.length > 0 ? (
-                <div className="mb-4">
-                  <h3 className="font-medium">__TAURI__ 对象包含的键:</h3>
-                  <div className="bg-gray-100 p-2 rounded mt-1">
-                    {apiState.apiDetails.tauriObjectKeys.map((key: string, index: number) => (
-                      <div key={index} className="text-sm font-mono">{key}</div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="mb-4 text-red-500">__TAURI__ 对象不存在或没有键</div>
-              )}
-              
-              <div className="space-y-2">
-                <div className="p-2 rounded bg-gray-100">
-                  <span className="font-medium">__TAURI_IPC__ 类型: </span>
-                  {apiState.apiDetails.tauriIpcType}
-                </div>
-                <div className="p-2 rounded bg-gray-100">
-                  <span className="font-medium">__TAURI_INTERNALS__ 类型: </span>
-                  {apiState.apiDetails.tauriInternalsType}
-                </div>
-                <div className={`p-2 rounded ${apiState.apiDetails.hasEventApi ? 'bg-green-100' : 'bg-red-100'}`}>
-                  <span className="font-medium">事件API可用: </span>
-                  {apiState.apiDetails.hasEventApi ? '是 ✓' : '否 ✗'}
-                </div>
-                <div className={`p-2 rounded ${apiState.apiDetails.hasInvokeApi ? 'bg-green-100' : 'bg-red-100'}`}>
-                  <span className="font-medium">invoke API可用: </span>
-                  {apiState.apiDetails.hasInvokeApi ? '是 ✓' : '否 ✗'}
-                </div>
-              </div>
-            </div>
+  if (loading) {
+    return (
+      <div className="p-4 border rounded-lg bg-slate-50 my-4">
+        <h3 className="font-medium text-lg mb-2">硬件检测</h3>
+        <div className="flex justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+      </div>
+    );
+  }
 
-            {/* 日志卡片 */}
-            <div className="bg-white rounded-lg shadow p-6 lg:col-span-2">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">控制台日志</h2>
-                <button 
-                  onClick={clearLogs}
-                  className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm"
-                >
-                  清除日志
-                </button>
-              </div>
-              <div className="bg-gray-900 text-green-400 p-4 rounded font-mono text-sm h-80 overflow-y-auto">
-                {apiState.logs.length > 0 ? (
-                  apiState.logs.map((log, index) => (
-                    <div key={index} className={`${log.includes('[Error]') ? 'text-red-400' : ''}`}>
-                      {log}
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-gray-500">暂无日志</div>
-                )}
-              </div>
+  if (error) {
+    return (
+      <div className="p-4 border rounded-lg bg-red-50 my-4">
+        <h3 className="font-medium text-lg mb-2">硬件检测</h3>
+        <div className="text-red-600">硬件检测失败: {error}</div>
+        <button 
+          onClick={detectHardwareInfo}
+          className="mt-2 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+        >
+          重试
+        </button>
+      </div>
+    );
+  }
+
+  if (!hardware) {
+    return (
+      <div className="p-4 border rounded-lg bg-slate-50 my-4">
+        <h3 className="font-medium text-lg mb-2">硬件检测</h3>
+        <div>未获取到硬件信息</div>
+        <button 
+          onClick={detectHardwareInfo}
+          className="mt-2 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+        >
+          检测硬件
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 border rounded-lg bg-slate-50 my-4">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="font-medium text-lg">硬件检测结果</h3>
+        <button 
+          onClick={detectHardwareInfo}
+          className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+        >
+          刷新
+        </button>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="border rounded-md p-3 bg-white">
+          <h4 className="font-medium text-md mb-2">CPU信息</h4>
+          <div className="space-y-1 text-sm">
+            <div><span className="font-medium">型号:</span> {hardware.cpu_info?.model_name || 'Unknown'}</div>
+            <div><span className="font-medium">核心数:</span> {hardware.cpu_info?.cores || 0}</div>
+            <div><span className="font-medium">是否ARM架构:</span> {hardware.cpu_info?.is_arm ? '是' : '否'}</div>
+            <div><span className="font-medium">架构:</span> {hardware.cpu_info?.architecture || 'Unknown'}</div>
+          </div>
+        </div>
+        
+        <div className="border rounded-md p-3 bg-white">
+          <h4 className="font-medium text-md mb-2">可信执行环境(TEE)支持</h4>
+          <div className="space-y-1 text-sm">
+            <div><span className="font-medium">TEE类型:</span> {hardware.tee_support?.tee_type || 'none'}</div>
+            <div><span className="font-medium">SGX:</span> {hardware.tee_support?.sgx_supported ? '支持 ✓' : '不支持 ✗'}</div>
+            <div><span className="font-medium">TrustZone:</span> {hardware.tee_support?.trustzone_supported ? '支持 ✓' : '不支持 ✗'}</div>
+            <div><span className="font-medium">Secure Enclave:</span> {hardware.tee_support?.secure_enclave_supported ? '支持 ✓' : '不支持 ✗'}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// TEE状态检查组件
+const TeeStatusCheck = () => {
+  const [teeStatus, setTeeStatus] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const checkTeeStatus = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const status = await getTeeStatus();
+      console.log('TEE状态:', status);
+      setTeeStatus(status);
+    } catch (err) {
+      console.error('TEE状态检查失败:', err);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    checkTeeStatus();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="p-4 border rounded-lg bg-slate-50 my-4">
+        <h3 className="font-medium text-lg mb-2">TEE状态</h3>
+        <div className="flex justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 border rounded-lg bg-red-50 my-4">
+        <h3 className="font-medium text-lg mb-2">TEE状态</h3>
+        <div className="text-red-600">TEE状态检查失败: {error}</div>
+        <button 
+          onClick={checkTeeStatus}
+          className="mt-2 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+        >
+          重试
+        </button>
+      </div>
+    );
+  }
+
+  if (!teeStatus) {
+    return (
+      <div className="p-4 border rounded-lg bg-slate-50 my-4">
+        <h3 className="font-medium text-lg mb-2">TEE状态</h3>
+        <div>未获取到TEE状态信息</div>
+        <button 
+          onClick={checkTeeStatus}
+          className="mt-2 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+        >
+          检查TEE状态
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 border rounded-lg bg-slate-50 my-4">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="font-medium text-lg">TEE状态</h3>
+        <button 
+          onClick={checkTeeStatus}
+          className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+        >
+          刷新
+        </button>
+      </div>
+      
+      <div className="border rounded-md p-3 bg-white">
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div><span className="font-medium">可用:</span> {teeStatus.available ? '是 ✓' : '否 ✗'}</div>
+          <div><span className="font-medium">已初始化:</span> {teeStatus.initialized ? '是 ✓' : '否 ✗'}</div>
+          <div><span className="font-medium">类型:</span> {teeStatus.type_name}</div>
+          <div><span className="font-medium">版本:</span> {teeStatus.version}</div>
+          <div><span className="font-medium">钱包已创建:</span> {teeStatus.wallet_created ? '是 ✓' : '否 ✗'}</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// API连接测试组件
+const ApiConnectionTest = () => {
+  const [apiStatus, setApiStatus] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const testConnection = async () => {
+    setLoading(true);
+    setError(null);
+    setApiStatus(null);
+    
+    try {
+      const status = await testApiConnection();
+      console.log('API连接状态:', status);
+      setApiStatus(status);
+    } catch (err) {
+      console.error('API连接测试失败:', err);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    testConnection();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="p-4 border rounded-lg bg-slate-50 my-4">
+        <h3 className="font-medium text-lg mb-2">API连接测试</h3>
+        <div className="flex justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`p-4 border rounded-lg my-4 ${error ? 'bg-red-50' : apiStatus ? 'bg-green-50' : 'bg-slate-50'}`}>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="font-medium text-lg">API连接测试</h3>
+        <button 
+          onClick={testConnection}
+          className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+        >
+          测试连接
+        </button>
+      </div>
+      
+      {error ? (
+        <div className="text-red-600">API连接测试失败: {error}</div>
+      ) : apiStatus ? (
+        <div className="text-green-700">{apiStatus}</div>
+      ) : (
+        <div>未获取到API连接状态</div>
+      )}
+    </div>
+  );
+};
+
+// 添加一个新的系统信息组件
+const SystemInfoDisplay = () => {
+  const [systemInfo, setSystemInfo] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchSystemInfo = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const info = await getSystemInfo();
+      console.log('系统信息:', info);
+      setSystemInfo(info);
+    } catch (err) {
+      console.error('获取系统信息失败:', err);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // 初始加载时获取系统信息
+    fetchSystemInfo();
+  }, []);
+
+  // 格式化内存/磁盘大小为易读格式
+  const formatSize = (size: number, unit: string) => {
+    if (size === 0) return 'Unknown';
+    return `${size} ${unit}`;
+  };
+
+  if (loading) {
+    return (
+      <div className="p-4 border rounded-lg bg-slate-50 my-4">
+        <h3 className="font-medium text-lg mb-2">系统信息</h3>
+        <div className="flex justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 border rounded-lg bg-red-50 my-4">
+        <h3 className="font-medium text-lg mb-2">系统信息</h3>
+        <div className="text-red-600">获取系统信息失败: {error}</div>
+        <button 
+          onClick={fetchSystemInfo}
+          className="mt-2 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+        >
+          重试
+        </button>
+      </div>
+    );
+  }
+
+  if (!systemInfo) {
+    return (
+      <div className="p-4 border rounded-lg bg-slate-50 my-4">
+        <h3 className="font-medium text-lg mb-2">系统信息</h3>
+        <div>未获取到系统信息</div>
+        <button 
+          onClick={fetchSystemInfo}
+          className="mt-2 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+        >
+          获取系统信息
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 border rounded-lg bg-slate-50 my-4">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="font-medium text-lg">系统信息</h3>
+        <button 
+          onClick={fetchSystemInfo}
+          className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+        >
+          刷新
+        </button>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 基本信息 */}
+        <div className="border rounded-md p-3 bg-white">
+          <h4 className="font-medium text-md mb-2">基本信息</h4>
+          <div className="space-y-1 text-sm">
+            <div><span className="font-medium">主机名:</span> {systemInfo.hostname}</div>
+            <div><span className="font-medium">操作系统:</span> {systemInfo.os_info.name}</div>
+            <div><span className="font-medium">版本:</span> {systemInfo.os_info.version}</div>
+            <div><span className="font-medium">内核:</span> {systemInfo.os_info.kernel}</div>
+            <div><span className="font-medium">架构:</span> {systemInfo.os_info.arch}</div>
+          </div>
+        </div>
+        
+        {/* CPU信息 */}
+        <div className="border rounded-md p-3 bg-white">
+          <h4 className="font-medium text-md mb-2">CPU</h4>
+          <div className="space-y-1 text-sm">
+            <div><span className="font-medium">型号:</span> {systemInfo.cpu_info.model}</div>
+            <div><span className="font-medium">物理核心:</span> {systemInfo.cpu_info.cores}</div>
+            <div><span className="font-medium">逻辑核心:</span> {systemInfo.cpu_info.threads}</div>
+            <div><span className="font-medium">主频:</span> {systemInfo.cpu_info.frequency.toFixed(2)} GHz</div>
+            <div><span className="font-medium">架构:</span> {systemInfo.cpu_info.architecture}</div>
+          </div>
+        </div>
+        
+        {/* 内存信息 */}
+        <div className="border rounded-md p-3 bg-white">
+          <h4 className="font-medium text-md mb-2">内存</h4>
+          <div className="space-y-1 text-sm">
+            <div><span className="font-medium">总内存:</span> {formatSize(systemInfo.memory_info.total, 'MB')}</div>
+            <div><span className="font-medium">可用内存:</span> {formatSize(systemInfo.memory_info.available, 'MB')}</div>
+            <div><span className="font-medium">使用率:</span> {systemInfo.memory_info.used_percent.toFixed(1)}%</div>
+            
+            {/* 内存使用率进度条 */}
+            <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+              <div 
+                className="bg-blue-600 h-2.5 rounded-full" 
+                style={{ width: `${Math.min(systemInfo.memory_info.used_percent, 100)}%` }}
+              ></div>
             </div>
           </div>
-        )}
-      </main>
+        </div>
+        
+        {/* 磁盘信息 */}
+        <div className="border rounded-md p-3 bg-white">
+          <h4 className="font-medium text-md mb-2">磁盘</h4>
+          <div className="space-y-1 text-sm">
+            <div><span className="font-medium">总容量:</span> {formatSize(systemInfo.disk_info.total, 'GB')}</div>
+            <div><span className="font-medium">可用空间:</span> {formatSize(systemInfo.disk_info.available, 'GB')}</div>
+            <div><span className="font-medium">使用率:</span> {systemInfo.disk_info.used_percent.toFixed(1)}%</div>
+            
+            {/* 磁盘使用率进度条 */}
+            <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+              <div 
+                className="bg-green-600 h-2.5 rounded-full" 
+                style={{ width: `${Math.min(systemInfo.disk_info.used_percent, 100)}%` }}
+              ></div>
+            </div>
+          </div>
+        </div>
+        
+        {/* 网络信息 */}
+        <div className="border rounded-md p-3 bg-white md:col-span-2">
+          <h4 className="font-medium text-md mb-2">网络</h4>
+          <div className="space-y-1 text-sm">
+            <div><span className="font-medium">网络接口:</span> {systemInfo.network_info.interface}</div>
+            <div><span className="font-medium">IP地址:</span> {systemInfo.network_info.ip_address}</div>
+            <div><span className="font-medium">MAC地址:</span> {systemInfo.network_info.mac_address}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default function TauriDebugPage() {
+  return (
+    <div className="container mx-auto p-4">
+      <Head>
+        <title>Tauri Debug - COS72</title>
+      </Head>
+      
+      <h1 className="text-2xl font-bold mb-6">Tauri调试与测试面板</h1>
+      
+      <TauriEnvironmentCheck />
+      
+      <HardwareDetection />
+      
+      {/* 添加系统信息组件 */}
+      <SystemInfoDisplay />
+      
+      <TeeStatusCheck />
+      
+      <ApiConnectionTest />
     </div>
   );
 } 

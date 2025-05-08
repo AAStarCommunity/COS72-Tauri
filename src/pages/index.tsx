@@ -349,138 +349,158 @@ export default function Home({ tauriApiReady }: { tauriApiReady?: boolean }) {
   return (
     <Layout>
       <Head>
-        <title>COS72</title>
-        <meta name="description" content="COS72 应用" />
-        <link rel="icon" href="/favicon.ico" />
+        <title>COS72 - Tauri 应用</title>
+        <meta name="description" content="COS72 - Tauri 应用，集成了多种高级功能和安全特性" />
       </Head>
-      
-      <main className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-center mb-8">{greeting}</h1>
-        
-        {/* 添加Tauri API状态组件 */}
-        <div className="mb-8">
-          <TauriApiStatus tauriApiReady={tauriApiReady} />
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-8">
-          <h2 className="text-xl font-semibold mb-4">系统状态</h2>
+
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <header className="flex flex-col items-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">{greeting}</h1>
+          <p className="text-md text-gray-600">当前运行环境: {environment}</p>
+          <p className="text-sm text-gray-500 mt-1">状态: {status}</p>
+        </header>
+
+        {/* 调试工具导航 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl w-full mb-8">
+          <Link href="/tauri-debug" className="p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+            <h2 className="text-xl font-semibold mb-2">Tauri 调试面板</h2>
+            <p className="text-gray-600">查看系统信息、硬件配置和Tauri运行状态</p>
+          </Link>
           
-          <div className="mb-4">
-            <div className="font-medium">运行环境: <span className="font-normal">{environment}</span></div>
-            <div className="font-medium">当前状态: <span className="font-normal">{status}</span></div>
+          <Link href="/tauri-communication-demo" className="p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+            <h2 className="text-xl font-semibold mb-2">Tauri 通信示例</h2>
+            <p className="text-gray-600">展示三种前后端通信方式：直接调用、计算器模式和事件模式</p>
+          </Link>
+        </div>
+
+        <main className="container mx-auto px-4 py-8">
+          <h1 className="text-3xl font-bold text-center mb-8">{greeting}</h1>
+          
+          {/* 添加Tauri API状态组件 */}
+          <div className="mb-8">
+            <TauriApiStatus tauriApiReady={tauriApiReady} />
           </div>
           
-          {/* 现有的硬件信息显示 */}
-          {hardwareInfo && (
+          <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-8">
+            <h2 className="text-xl font-semibold mb-4">系统状态</h2>
+            
             <div className="mb-4">
-              <h3 className="text-lg font-medium mb-2">硬件信息</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <div className="font-medium">CPU:</div>
-                  <div className="ml-4 text-sm">
-                    <div>架构: {hardwareInfo.cpu.architecture}</div>
-                    <div>型号: {hardwareInfo.cpu.model_name}</div>
-                    <div>核心数: {hardwareInfo.cpu.cores}</div>
-                    <div>ARM架构: {hardwareInfo.cpu.is_arm ? '是' : '否'}</div>
+              <div className="font-medium">运行环境: <span className="font-normal">{environment}</span></div>
+              <div className="font-medium">当前状态: <span className="font-normal">{status}</span></div>
+            </div>
+            
+            {/* 现有的硬件信息显示 */}
+            {hardwareInfo && (
+              <div className="mb-4">
+                <h3 className="text-lg font-medium mb-2">硬件信息</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <div className="font-medium">CPU:</div>
+                    <div className="ml-4 text-sm">
+                      <div>架构: {hardwareInfo.cpu.architecture}</div>
+                      <div>型号: {hardwareInfo.cpu.model_name}</div>
+                      <div>核心数: {hardwareInfo.cpu.cores}</div>
+                      <div>ARM架构: {hardwareInfo.cpu.is_arm ? '是' : '否'}</div>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <div className="font-medium">内存:</div>
-                  <div className="ml-4 text-sm">{(hardwareInfo.memory / 1024 / 1024 / 1024).toFixed(2)} GB</div>
-                  
-                  <div className="font-medium mt-2">可信执行环境 (TEE):</div>
-                  <div className="ml-4 text-sm">
-                    <div>类型: {hardwareInfo.tee.tee_type}</div>
-                    <div>SGX: {hardwareInfo.tee.sgx_supported ? '支持' : '不支持'}</div>
-                    <div>TrustZone: {hardwareInfo.tee.trustzone_supported ? '支持' : '不支持'}</div>
-                    <div>Secure Enclave: {hardwareInfo.tee.secure_enclave_supported ? '支持' : '不支持'}</div>
+                  <div>
+                    <div className="font-medium">内存:</div>
+                    <div className="ml-4 text-sm">{(hardwareInfo.memory / 1024 / 1024 / 1024).toFixed(2)} GB</div>
+                    
+                    <div className="font-medium mt-2">可信执行环境 (TEE):</div>
+                    <div className="ml-4 text-sm">
+                      <div>类型: {hardwareInfo.tee.tee_type}</div>
+                      <div>SGX: {hardwareInfo.tee.sgx_supported ? '支持' : '不支持'}</div>
+                      <div>TrustZone: {hardwareInfo.tee.trustzone_supported ? '支持' : '不支持'}</div>
+                      <div>Secure Enclave: {hardwareInfo.tee.secure_enclave_supported ? '支持' : '不支持'}</div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-          
-          {/* 现有的TEE状态显示 */}
-          {teeStatus && (
-            <div className="mb-4">
-              <h3 className="text-lg font-medium mb-2">TEE状态</h3>
-              <div className="ml-4 text-sm">
-                <div>可用: {teeStatus.available ? '是' : '否'}</div>
-                <div>已初始化: {teeStatus.initialized ? '是' : '否'}</div>
-                <div>类型: {teeStatus.type_name}</div>
-                <div>版本: {teeStatus.version}</div>
-                <div>钱包已创建: {teeStatus.wallet_created ? '是' : '否'}</div>
+            )}
+            
+            {/* 现有的TEE状态显示 */}
+            {teeStatus && (
+              <div className="mb-4">
+                <h3 className="text-lg font-medium mb-2">TEE状态</h3>
+                <div className="ml-4 text-sm">
+                  <div>可用: {teeStatus.available ? '是' : '否'}</div>
+                  <div>已初始化: {teeStatus.initialized ? '是' : '否'}</div>
+                  <div>类型: {teeStatus.type_name}</div>
+                  <div>版本: {teeStatus.version}</div>
+                  <div>钱包已创建: {teeStatus.wallet_created ? '是' : '否'}</div>
+                </div>
               </div>
+            )}
+            
+            {/* 现有的操作按钮 */}
+            <div className="flex flex-wrap gap-2 mt-6">
+              <button
+                onClick={handleChallengeSignature}
+                disabled={isLoading}
+                className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded disabled:bg-gray-400"
+              >
+                签名挑战
+              </button>
+              
+              {teeStatus && !teeStatus.initialized && (
+                <button
+                  onClick={handleInitializeTee}
+                  disabled={isLoading}
+                  className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded disabled:bg-gray-400"
+                >
+                  初始化TEE
+                </button>
+              )}
+              
+              {teeStatus && teeStatus.initialized && !teeStatus.wallet_created && (
+                <button
+                  onClick={handleCreateWallet}
+                  disabled={isLoading}
+                  className="bg-purple-500 hover:bg-purple-600 text-white py-2 px-4 rounded disabled:bg-gray-400"
+                >
+                  创建钱包
+                </button>
+              )}
+            </div>
+          </div>
+          
+          {/* 错误详情部分 */}
+          {errorDetails && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 rounded-lg mb-8">
+              <h3 className="text-lg font-medium text-red-800 dark:text-red-400 mb-2">错误详情</h3>
+              <pre className="text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap font-mono bg-red-100/50 dark:bg-red-900/50 p-2 rounded">
+                {errorDetails}
+              </pre>
             </div>
           )}
           
-          {/* 现有的操作按钮 */}
-          <div className="flex flex-wrap gap-2 mt-6">
+          {/* 开发者调试按钮 */}
+          <div className="text-center mb-4">
             <button
-              onClick={handleChallengeSignature}
-              disabled={isLoading}
-              className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded disabled:bg-gray-400"
+              onClick={toggleDebug}
+              className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
             >
-              签名挑战
+              {showDebug ? '隐藏调试信息' : '显示调试信息'}
             </button>
-            
-            {teeStatus && !teeStatus.initialized && (
-              <button
-                onClick={handleInitializeTee}
-                disabled={isLoading}
-                className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded disabled:bg-gray-400"
-              >
-                初始化TEE
-              </button>
-            )}
-            
-            {teeStatus && teeStatus.initialized && !teeStatus.wallet_created && (
-              <button
-                onClick={handleCreateWallet}
-                disabled={isLoading}
-                className="bg-purple-500 hover:bg-purple-600 text-white py-2 px-4 rounded disabled:bg-gray-400"
-              >
-                创建钱包
-              </button>
-            )}
           </div>
-        </div>
-        
-        {/* 错误详情部分 */}
-        {errorDetails && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 rounded-lg mb-8">
-            <h3 className="text-lg font-medium text-red-800 dark:text-red-400 mb-2">错误详情</h3>
-            <pre className="text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap font-mono bg-red-100/50 dark:bg-red-900/50 p-2 rounded">
-              {errorDetails}
-            </pre>
-          </div>
-        )}
-        
-        {/* 开发者调试按钮 */}
-        <div className="text-center mb-4">
-          <button
-            onClick={toggleDebug}
-            className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-          >
-            {showDebug ? '隐藏调试信息' : '显示调试信息'}
-          </button>
-        </div>
-        
-        {/* 调试信息 */}
-        {showDebug && typeof window !== 'undefined' && (
-          <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-lg mb-8">
-            <h3 className="text-lg font-medium mb-2">调试信息</h3>
-            <pre className="text-xs font-mono whitespace-pre-wrap overflow-x-auto bg-gray-200 dark:bg-gray-800 p-2 rounded">
-              {`环境: ${environment}
+          
+          {/* 调试信息 */}
+          {showDebug && typeof window !== 'undefined' && (
+            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-lg mb-8">
+              <h3 className="text-lg font-medium mb-2">调试信息</h3>
+              <pre className="text-xs font-mono whitespace-pre-wrap overflow-x-auto bg-gray-200 dark:bg-gray-800 p-2 rounded">
+                {`环境: ${environment}
 状态: ${status}
 Tauri API就绪: ${tauriApiReady ? '是' : '否'}
 window.__IS_TAURI_APP__: ${String(Boolean(window.__IS_TAURI_APP__))}
 window.__TAURI__: ${typeof window.__TAURI__ !== 'undefined' ? '存在' : '不存在'}
 window.__TAURI_IPC__: ${typeof window.__TAURI_IPC__ !== 'undefined' ? '存在' : '不存在'}`}
-            </pre>
-          </div>
-        )}
-      </main>
+              </pre>
+            </div>
+          )}
+        </main>
+      </div>
     </Layout>
   );
 } 
