@@ -780,3 +780,46 @@ Tauri
 - Dockerfile.eth-wallet-mock - Added Docker support for mock service
 - ETH-WALLET-MOCK-README.md - Added documentation for Linux testing
 - CHANGES.md - Updated with version 0.3.3 changes
+
+## [0.3.6] - 2025-05-10 (WebAuthn与TEE兼容性修复)
+
+### WebAuthn修复
+
+- 修复了WebAuthn API初始化和检测问题：
+  1. 改进了Tauri API注入机制，确保`window.__TAURI__`对象正确暴露
+  2. 添加了自动检测API缺失并尝试重新注入的功能
+  3. 增强了降级机制，在API初始化失败时提供更明确的错误信息
+  4. 添加了针对WebAuthn调试的额外日志记录
+
+### TEE连接增强
+
+- 改进了TEE服务连接机制：
+  1. 增强了错误处理和诊断能力，提供更详细的错误信息
+  2. 添加了连接重试机制，增强系统稳定性
+  3. 改进了远程TEE检测逻辑，支持更可靠的自动发现
+  4. 更新了OP-TEE适配器，支持Raspberry Pi 5
+
+### 文档更新
+
+- 更新了部署和故障排除文档：
+  1. 添加了常见错误排查指南，包括API初始化和TEE连接问题
+  2. 更新了RASPI-TEE-SETUP.md，适配Raspberry Pi 5
+  3. 在PLAN.md中添加了WasmEdge集成计划
+  4. 扩展了deploy.md，增加更多故障排除信息
+
+### 测试增强
+
+- 添加了自动化测试用例：
+  1. 为WebAuthn初始化添加了测试场景
+  2. 为TEE连接添加了模拟测试
+  3. 增加了边缘情况的错误处理测试
+
+### 修改的文件
+
+- src-tauri/src/main.rs - 改进DOM就绪注入脚本，增加Tauri对象检测与修复逻辑
+- src-tauri/src/fido/webauthn.rs - 增强错误处理和调试信息
+- src-tauri/src/tee/optee_adapter.rs - 更新适配Raspberry Pi 5
+- deploy.md - 添加常见错误排查部分
+- RASPI-TEE-SETUP.md - 更新为Raspberry Pi 5适配
+- PLAN.md - 添加WasmEdge集成计划
+- CHANGES.md - 添加v0.3.6版本记录

@@ -77,6 +77,22 @@ fn main() {
                         // 确保环境标记存在
                         window.__IS_TAURI_APP__ = true;
                         
+                        // 调试Tauri对象
+                        console.log('[TAURI-INJECT] 检查Tauri对象:', {
+                            __TAURI__: typeof window.__TAURI__ !== 'undefined',
+                            __TAURI_IPC__: typeof window.__TAURI_IPC__ !== 'undefined'
+                        });
+                        
+                        // 如果Tauri对象不存在，尝试重新注入
+                        if (typeof window.__TAURI__ === 'undefined') {
+                            console.log('[TAURI-INJECT] 尝试重新注入Tauri对象');
+                            // 通知前端需要刷新页面
+                            const refreshEvent = new CustomEvent('tauri-refresh-needed', {
+                                detail: { reason: 'Missing Tauri API' }
+                            });
+                            window.dispatchEvent(refreshEvent);
+                        }
+                        
                         // 触发API就绪事件
                         console.log('[TAURI-INJECT] 发送API就绪事件');
                         const apiReadyEvent = new CustomEvent('tauri-api-ready', {

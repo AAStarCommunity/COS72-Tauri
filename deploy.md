@@ -1044,3 +1044,34 @@ pnpm tauri dev -- --tee-type optee --tee-remote http://localhost:3030
 ```
 
 这将启动应用程序并连接到模拟的远程TEE服务。 
+
+## 常见错误排查
+
+### 错误: window.__TAURI__不存在或window.__TAURI_IPC__类型undefined
+
+这是由于Tauri API未正确初始化导致的。可通过以下步骤解决:
+
+1. 确保运行最新版本的Tauri 2.0
+2. 检查您的tauri.conf.json配置是否正确
+3. 重新构建应用: `pnpm run tauri build`
+4. 清除浏览器缓存并重新启动应用
+
+### 错误: TEE初始化失败 - Connection refused (os error 61)
+
+这表明TEE服务未启动或无法访问。解决方法:
+
+1. 检查本地TEE服务是否运行: `curl http://localhost:3030/api/tee/status`
+2. 如果使用远程TEE(如树莓派)，确保服务正在运行并且网络连接正常
+3. 检查防火墙设置是否阻止了连接
+4. 如果使用树莓派OP-TEE，请按照RASPI-TEE-SETUP.md中的步骤进行设置
+
+### 错误: WebAuthn注册卡在"Starting registration process..."
+
+这通常由于WebAuthn API调用失败导致:
+
+1. 确保您使用的是支持WebAuthn的浏览器（Chrome, Firefox, Safari等最新版本）
+2. 在macOS上，确保应用有Touch ID权限
+3. 检查Tauri权限配置是否包含biometric访问权限
+4. 尝试重新启动应用，清除应用数据
+
+如果问题持续存在，请查看控制台日志获取更详细的错误信息。 
