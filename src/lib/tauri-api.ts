@@ -1,20 +1,612 @@
-// Tauri API wrapper for compatibility
-import { mockInvoke, setMockHardwareType } from './tauri-mock';
+/**
+ * Tauri API 封装模块 (v0.4.1)
+ * 
+ * 此模块提供了与Tauri后端通信的标准接口，遵循Tauri 2.0最佳实践
+ * 优化后支持多种通信机制和优雅降级策略
+ */
 
-// 扩展Window接口，添加Tauri相关属性
+import { isBoolean } from 'util';
+import { mockInvoke as tauriMockInvoke, setMockHardwareType } from './tauri-mock';
+
+// 定义全局Window接口，添加Tauri相关属性
 declare global {
   interface Window {
+    __TAURI__?: {
+      invoke?: (cmd: string, args?: any) => Promise<any>;
+      convertFileSrc?: (filePath: string, protocol?: string) => string;
+      event?: {
+        listen: (event: string, callback: (event: any) => void) => (() => void);
+        once: (event: string, callback: (event: any) => void) => (() => void);
+        emit: (event: string, payload?: any) => Promise<void>;
+      };
+      [key: string]: any;
+    };
+    __TAURI_IPC__?: {
+      postMessage: (message: string) => void;
+    };
+    __TAURI_INTERNALS__?: any;
     __IS_TAURI_APP__?: boolean;
-    __TAURI__?: any;
-    __TAURI_IPC__?: any;
   }
 }
 
-// 标记Tauri环境状态
-let isTauriEnv: boolean | null = null;
+// API状态追踪
+let isWaitingForApi = false;
+let apiReady = false;
+let hasAttemptedRefresh = false;
+
+/**
+ * 检测当前是否处于Tauri环境
+ * 使用多重检测策略确保准确性
+ */
+export async function isTauriEnvironment(): Promise<boolean> {
+  // 记录检测开始
+  console.log(`[TAURI-API-0.4.1] - 检测Tauri环境`);
+  
+  // 1. 检查环境标记 (快速检测)
+  if (typeof window.__IS_TAURI_APP__ !== 'undefined' && window.__IS_TAURI_APP__ === true) {
+    console.log(`[TAURI-API-0.4.1] - 检测到__IS_TAURI_APP__标记`);
+    return true;
+  }
+  
+  // 2. 检查Tauri对象 (官方推荐)
+  if (typeof window.__TAURI__ !== 'undefined') {
+    console.log(`[TAURI-API-0.4.1] - 检测到__TAURI__对象，确认Tauri环境`);
+    return true;
+  }
+  
+  // 3. 检查Tauri内部对象
+  if (typeof window.__TAURI_INTERNALS__ !== 'undefined') {
+    console.log(`[TAURI-API-0.4.1] - 检测到__TAURI_INTERNALS__，确认Tauri环境`);
+    return true;
+  }
+  
+  // 4. 检查Tauri IPC对象
+  if (typeof window.__TAURI_IPC__ !== 'undefined') {
+    console.log(`[TAURI-API-0.4.1] - 检测到__TAURI_IPC__对象，确认Tauri环境`);
+    return true;
+  }
+  
+  // 未检测到Tauri环境
+  console.log(`[TAURI-API-0.4.1] - 未检测到Tauri环境标记`);
+  return false;
+}
+
+/**
+ * 检查Tauri API对象的可用性
+ * @returns 如果API可用返回true
+ */
+function isApiAvailable(): boolean {
+  return (
+    typeof window.__TAURI__ !== 'undefined' &&
+    typeof window.__TAURI__.invoke === 'function'
+  );
+}
+
+/**
+ * 尝试通过直接IPC通道实现invoke功能
+ * 当__TAURI_IPC__存在但__TAURI__API缺失时使用
+ * @param command 要调用的命令
+ * @param args 命令参数
+ * @returns Promise<T> 命令执行结果
+ */
+async function invokeViaIpc<T>(command: string, args?: Record<string, any>): Promise<T> {
+  if (typeof window.__TAURI_IPC__ === 'undefined' || typeof window.__TAURI_IPC__.postMessage !== 'function') {
+    throw new Error('IPC通道不可用');
+  }
+  
+  console.log(`[TAURI-API-0.4.1] - 通过IPC通道调用命令: ${command}`, args);
+  
+  return new Promise<T>((resolve, reject) => {
+    // 生成唯一请求ID
+    const requestId = 'req_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
+    
+    // 响应处理程序
+    const responseHandler = (event: MessageEvent) => {
+      try {
+        if (typeof event.data === 'string') {
+          const response = JSON.parse(event.data);
+          if (response && response.id === requestId) {
+            window.removeEventListener('message', responseHandler);
+            clearTimeout(timeoutId);
+            if (response.success) {
+              resolve(response.data as T);
+            } else {
+              reject(response.error || new Error('调用失败'));
+            }
+          }
+        }
+      } catch (e) {
+        // 忽略非预期的消息格式
+      }
+    };
+    
+    // 注册响应监听
+    window.addEventListener('message', responseHandler);
+    
+    // 超时处理
+    const timeoutId = setTimeout(() => {
+      window.removeEventListener('message', responseHandler);
+      reject(new Error(`命令 ${command} 调用超时`));
+    }, 30000); // 30秒超时
+    
+    // 准备请求
+    const request = {
+      cmd: '__tauri_invoke',
+      id: requestId,
+      command,
+      ...args
+    };
+    
+    // 发送请求
+    try {
+      window.__TAURI_IPC__!.postMessage(JSON.stringify(request));
+    } catch (error) {
+      clearTimeout(timeoutId);
+      window.removeEventListener('message', responseHandler);
+      reject(error);
+    }
+  });
+}
+
+/**
+ * 等待Tauri API就绪
+ * 遵循官方文档推荐的实践，确保API可用后再调用
+ * @param timeout 超时时间(毫秒)
+ * @param retryAttempt 当前重试次数
+ * @returns Promise<boolean> API是否就绪
+ */
+export async function waitForTauriApi(timeout = 10000, retryAttempt = 0): Promise<boolean> {
+  // 防止多个调用同时等待
+  if (isWaitingForApi) {
+    console.log(`[TAURI-API-0.4.1] - 已有等待中的API就绪请求，共享结果`);
+    await new Promise<void>(resolve => {
+      const checkInterval = setInterval(() => {
+        if (!isWaitingForApi) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 100);
+    });
+    return apiReady;
+  }
+  
+  // 如果API已经就绪，立即返回
+  if (apiReady && isApiAvailable()) {
+    console.log(`[TAURI-API-0.4.1] - Tauri API已就绪`);
+    return true;
+  }
+  
+  // 设置等待状态
+  isWaitingForApi = true;
+  
+  // 调整超时时间(重试时增加)
+  const adjustedTimeout = timeout * (1 + Math.min(retryAttempt, 3) * 0.5);
+  
+  console.log(`[TAURI-API-0.4.1] - 等待Tauri API准备就绪，超时时间: ${adjustedTimeout}ms，重试次数: ${retryAttempt}`);
+  
+  try {
+    // 创建Promise等待API就绪
+    const result = await new Promise<boolean>((resolve) => {
+      // 设置超时
+      const timeoutId = setTimeout(() => {
+        console.log(`[TAURI-API-0.4.1] - 等待Tauri API超时`);
+        window.removeEventListener('tauri-api-ready', apiReadyHandler);
+        
+        // 超时后尝试发起API重新注入请求
+        if (!hasAttemptedRefresh && retryAttempt < 2) {
+          console.log(`[TAURI-API-0.4.1] - 尝试请求API重新注入`);
+          
+          try {
+            const event = new CustomEvent('tauri-reinject-api');
+            window.dispatchEvent(event);
+            hasAttemptedRefresh = true;
+            
+            // 给重新注入一些额外时间
+            setTimeout(() => {
+              if (isApiAvailable()) {
+                console.log(`[TAURI-API-0.4.1] - 重新注入后API可用`);
+                resolve(true);
+              } else {
+                console.log(`[TAURI-API-0.4.1] - 重新注入后API仍不可用`);
+                resolve(false);
+              }
+              isWaitingForApi = false;
+            }, 2000);
+          } catch (e) {
+            console.error(`[TAURI-API-0.4.1] - 重新注入请求失败`, e);
+            resolve(false);
+            isWaitingForApi = false;
+          }
+        } else {
+          // 重试次数过多，放弃等待
+          resolve(isApiAvailable());
+          isWaitingForApi = false;
+        }
+      }, adjustedTimeout);
+      
+      // API就绪事件处理
+      const apiReadyHandler = () => {
+        clearTimeout(timeoutId);
+        console.log(`[TAURI-API-0.4.1] - 收到Tauri API就绪事件`);
+        
+        if (isApiAvailable()) {
+          console.log(`[TAURI-API-0.4.1] - 确认Tauri API可用`);
+          resolve(true);
+        } else {
+          console.log(`[TAURI-API-0.4.1] - 尽管收到就绪事件，但API仍不可用`);
+          
+          // 如果API仍不可用但有IPC通道，可以继续
+          if (typeof window.__TAURI_IPC__ !== 'undefined') {
+            console.log(`[TAURI-API-0.4.1] - 检测到IPC通道，视为可用`);
+            resolve(true);
+          } else {
+            resolve(false);
+          }
+        }
+        isWaitingForApi = false;
+      };
+      
+      // 注册API就绪事件监听
+      window.addEventListener('tauri-api-ready', apiReadyHandler, { once: true });
+      
+      // 尝试触发IPC检查
+      try {
+        const checkEvent = new CustomEvent('tauri://ipc-check');
+        window.dispatchEvent(checkEvent);
+      } catch (e) {
+        console.error(`[TAURI-API-0.4.1] - IPC检查事件发送失败`, e);
+      }
+      
+      // 立即检查一次
+      if (isApiAvailable()) {
+        clearTimeout(timeoutId);
+        window.removeEventListener('tauri-api-ready', apiReadyHandler);
+        console.log(`[TAURI-API-0.4.1] - 立即检查确认Tauri API已就绪`);
+        resolve(true);
+        isWaitingForApi = false;
+      }
+    });
+    
+    // 更新API状态并返回
+    apiReady = result;
+    return result;
+    
+  } catch (error) {
+    console.error(`[TAURI-API-0.4.1] - 等待API就绪时发生错误:`, error);
+    isWaitingForApi = false;
+    apiReady = false;
+    return false;
+  }
+}
+
+/**
+ * 遵循Tauri官方推荐的命令调用方式
+ * 支持多种通信机制，优先使用官方API，失败时自动尝试替代方案
+ * @param command 命令名称
+ * @param args 命令参数
+ * @returns Promise<T> 命令执行结果
+ */
+export async function invoke<T>(command: string, args?: Record<string, any>): Promise<T> {
+  console.log(`[TAURI-API-0.4.1] - 调用命令: ${command}`, args);
+  
+  // 检测Tauri环境
+  const isTauri = await isTauriEnvironment();
+  
+  if (isTauri) {
+    console.log(`[TAURI-API-0.4.1] - 在Tauri环境中调用: ${command}`);
+    
+    // 等待API就绪 (增加超时时间确保有足够时间初始化)
+    let apiReady = await waitForTauriApi(10000);
+    let retryCount = 0;
+    
+    // 如果API未就绪，尝试重试
+    while (!apiReady && retryCount < 2) {
+      console.log(`[TAURI-API-0.4.1] - API未就绪，尝试重试 ${retryCount + 1}/2`);
+      retryCount++;
+      
+      // 二次尝试刷新API
+      await refreshTauriApi();
+      
+      // 再次等待API，递增超时时间
+      apiReady = await waitForTauriApi(10000 + retryCount * 5000, retryCount);
+    }
+    
+    if (apiReady) {
+      try {
+        // 1. 首选: 使用官方标准API (最推荐的调用方式)
+        if (isApiAvailable()) {
+          console.log(`[TAURI-API-0.4.1] - 使用标准API调用: ${command}`);
+          return await window.__TAURI__!.invoke!(command, args) as T;
+        }
+        
+        // 2. 次选: 使用内部API (如果可用)
+        if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
+          console.log(`[TAURI-API-0.4.1] - 使用内部API调用: ${command}`);
+          return await window.__TAURI_INTERNALS__.invoke(command, args) as T;
+        }
+        
+        // 3. 最后选择: 使用IPC通道
+        if (window.__TAURI_IPC__ && typeof window.__TAURI_IPC__.postMessage === 'function') {
+          console.log(`[TAURI-API-0.4.1] - 通过IPC通道调用: ${command}`);
+          return await invokeViaIpc<T>(command, args);
+        }
+        
+        // 所有方法都失败，抛出错误
+        throw new Error(`没有可用的Tauri API调用机制。 command=${command}`);
+      } catch (error) {
+        console.error(`[TAURI-API-0.4.1] - 调用失败: ${command}`, error);
+        
+        // 如果是首次调用失败，尝试刷新API后重试一次
+        if (!hasAttemptedRefresh) {
+          console.log(`[TAURI-API-0.4.1] - 尝试刷新API后重试命令: ${command}`);
+          hasAttemptedRefresh = true;
+          
+          const refreshed = await refreshTauriApi();
+          
+          if (refreshed && isApiAvailable()) {
+            console.log(`[TAURI-API-0.4.1] - API刷新成功，重试命令: ${command}`);
+            return await window.__TAURI__!.invoke!(command, args) as T;
+          }
+        }
+        
+        throw error;
+      }
+    }
+    
+    console.log(`[TAURI-API-0.4.1] - API未就绪，降级到模拟实现: ${command}`);
+  } else {
+    console.log(`[TAURI-API-0.4.1] - 非Tauri环境，使用模拟实现: ${command}`);
+  }
+  
+  // 降级到模拟实现
+  return tauriMockInvoke(command, args);
+}
+
+/**
+ * 主动监听Tauri事件
+ * 遵循官方文档推荐的事件监听模式
+ * @param event 事件名称
+ * @param callback 回调函数
+ * @returns 用于注销监听的函数
+ */
+export async function listen<T>(event: string, callback: (event: { event: string; payload: T }) => void): Promise<() => void> {
+  console.log(`[TAURI-API-0.4.1] - 注册事件监听: ${event}`);
+  
+  // 等待API就绪
+  const apiReady = await waitForTauriApi();
+  
+  if (apiReady && window.__TAURI__?.event?.listen) {
+    try {
+      // 使用官方API注册事件监听
+      console.log(`[TAURI-API-0.4.1] - 使用官方API注册事件监听: ${event}`);
+      return window.__TAURI__.event.listen(event, callback);
+    } catch (error) {
+      console.error(`[TAURI-API-0.4.1] - 注册事件监听失败: ${event}`, error);
+    }
+  }
+  
+  // 创建模拟的事件监听(空实现)
+  console.log(`[TAURI-API-0.4.1] - 创建模拟事件监听: ${event}`);
+  return () => {
+    console.log(`[TAURI-API-0.4.1] - 注销模拟事件监听: ${event}`);
+  };
+}
+
+/**
+ * 请求重新注入Tauri API
+ * 当检测到API不可用时可以调用此函数尝试恢复
+ */
+export async function refreshTauriApi(): Promise<boolean> {
+  console.log(`[TAURI-API-0.4.1] - 请求重新注入Tauri API`);
+  
+  // 重置状态
+  apiReady = false;
+  isWaitingForApi = false;
+  
+  // 发送重新注入事件
+  try {
+    const reinjectionEvent = new CustomEvent('tauri-reinject-api');
+    window.dispatchEvent(reinjectionEvent);
+  } catch (error) {
+    console.error(`[TAURI-API-0.4.1] - 发送重新注入事件失败`, error);
+    return false;
+  }
+  
+  // 等待API就绪 (最多等待5秒)
+  return new Promise((resolve) => {
+    const timeoutId = setTimeout(() => {
+      resolve(isApiAvailable());
+    }, 5000);
+    
+    const apiReadyHandler = () => {
+      clearTimeout(timeoutId);
+      setTimeout(() => {
+        resolve(isApiAvailable());
+      }, 500); // 给API对象初始化一些时间
+    };
+    
+    window.addEventListener('tauri-api-ready', apiReadyHandler, { once: true });
+  });
+}
+
+/**
+ * 检测硬件信息
+ */
+export async function detectHardware(): Promise<any> {
+  try {
+    return await invoke('detect_hardware');
+  } catch (error) {
+    console.error('[TAURI-API-0.4.1] - 硬件检测失败', error);
+    throw error;
+  }
+}
+
+/**
+ * 获取TEE状态
+ */
+export async function getTeeStatus(): Promise<any> {
+  try {
+    return await invoke('get_tee_status');
+  } catch (error) {
+    console.error('[TAURI-API-0.4.1] - 获取TEE状态失败', error);
+    throw error;
+  }
+}
+
+/**
+ * 初始化TEE环境
+ */
+export async function initializeTee(): Promise<boolean> {
+  try {
+    return await invoke<boolean>('initialize_tee');
+  } catch (error) {
+    console.error('[TAURI-API-0.4.1] - 初始化TEE失败', error);
+    throw error;
+  }
+}
+
+/**
+ * 执行TEE操作
+ * @param operation 操作名称或参数对象
+ */
+export async function performTeeOperation(operation: string | Record<string, any>): Promise<any> {
+  try {
+    // 如果是对象，转换为JSON字符串
+    const operationParam = typeof operation === 'string' 
+      ? operation 
+      : JSON.stringify(operation);
+      
+    return await invoke('perform_tee_operation', { operation: operationParam });
+  } catch (error) {
+    console.error('[TAURI-API-0.4.1] - 执行TEE操作失败', error);
+    throw error;
+  }
+}
+
+/**
+ * 验证Passkey
+ * @param challenge 挑战字符串
+ */
+export async function verifyPasskey(challenge: string): Promise<any> {
+  try {
+    return await invoke('verify_passkey', { challenge });
+  } catch (error) {
+    console.error('[TAURI-API-0.4.1] - 验证Passkey失败', error);
+    throw error;
+  }
+}
+
+/**
+ * 检查WebAuthn支持状态
+ */
+export async function isWebauthnSupported(): Promise<boolean> {
+  try {
+    return await invoke<boolean>('webauthn_supported');
+  } catch (error) {
+    console.error('[TAURI-API-0.4.1] - 检查WebAuthn支持失败', error);
+    // 降级到浏览器API检测
+    return typeof navigator.credentials !== 'undefined' && 
+           typeof navigator.credentials.create === 'function';
+  }
+}
+
+/**
+ * 检查生物识别支持状态
+ */
+export async function isBiometricSupported(): Promise<boolean> {
+  try {
+    return await invoke<boolean>('webauthn_biometric_supported');
+  } catch (error) {
+    console.error('[TAURI-API-0.4.1] - 检查生物识别支持失败', error);
+    // 降级到简单的平台检测
+    const userAgent = navigator.userAgent.toLowerCase();
+    return userAgent.includes('mac') || 
+           userAgent.includes('windows') || 
+           userAgent.includes('android') || 
+           userAgent.includes('iphone') || 
+           userAgent.includes('ipad');
+  }
+}
+
+/**
+ * 开始WebAuthn注册
+ * @param username 用户名
+ */
+export async function startWebauthnRegistration(username: string): Promise<any> {
+  try {
+    return await invoke('webauthn_start_registration', { username });
+  } catch (error) {
+    console.error('[TAURI-API-0.4.1] - 开始WebAuthn注册失败', error);
+    throw error;
+  }
+}
+
+/**
+ * 完成WebAuthn注册
+ * @param userId 用户ID
+ * @param response 注册响应
+ */
+export async function finishWebauthnRegistration(userId: string, response: string): Promise<any> {
+  try {
+    return await invoke('webauthn_finish_registration', { user_id: userId, response });
+  } catch (error) {
+    console.error('[TAURI-API-0.4.1] - 完成WebAuthn注册失败', error);
+    throw error;
+  }
+}
+
+/**
+ * 获取WebAuthn凭证
+ * @param userId 用户ID
+ */
+export async function getWebauthnCredentials(userId: string): Promise<any> {
+  try {
+    return await invoke('webauthn_get_credentials', { user_id: userId });
+  } catch (error) {
+    console.error('[TAURI-API-0.4.1] - 获取WebAuthn凭证失败', error);
+    throw error;
+  }
+}
+
+/**
+ * 完成WebAuthn认证
+ * @param response 认证响应
+ */
+export async function finishWebauthnAuthentication(response: string): Promise<any> {
+  try {
+    return await invoke('webauthn_finish_authentication', { response });
+  } catch (error) {
+    console.error('[TAURI-API-0.4.1] - 完成WebAuthn认证失败', error);
+    throw error;
+  }
+}
+
+/**
+ * 检查生物识别权限
+ */
+export async function checkBiometricPermission(): Promise<boolean> {
+  try {
+    return await invoke<boolean>('check_biometric_permission');
+  } catch (error) {
+    console.error('[TAURI-API-0.4.1] - 检查生物识别权限失败', error);
+    return false;
+  }
+}
+
+/**
+ * 请求生物识别权限
+ */
+export async function requestBiometricPermission(): Promise<boolean> {
+  try {
+    return await invoke<boolean>('request_biometric_permission');
+  } catch (error) {
+    console.error('[TAURI-API-0.4.1] - 请求生物识别权限失败', error);
+    return false;
+  }
+}
 
 // 版本号
-const VERSION = '0.3.0';
+const VERSION = '0.4.1';
 
 // 调试模式
 const DEBUG = true;
@@ -29,334 +621,10 @@ function debugLog(...args: any[]) {
 // 缓存检测结果
 let cachedHardwareInfo: any = null;
 
-// 检测是否在Tauri环境中运行
-export async function isTauriEnvironment(): Promise<boolean> {
-  // 如果已经检测过，直接返回结果
-  if (isTauriEnv !== null) {
-    return isTauriEnv;
-  }
-  
-  try {
-    debugLog('检测Tauri环境');
-    
-    // 检查基本标记
-    if (typeof window !== 'undefined') {
-      // 首先检查环境标记
-      if (window.__IS_TAURI_APP__) {
-        debugLog('检测到__IS_TAURI_APP__标记');
-        
-        // 检查官方API对象
-        if (window.__TAURI__) {
-          debugLog('检测到官方__TAURI__对象，确认Tauri环境');
-          isTauriEnv = true;
-          return true;
-        }
-        
-        // 尝试动态导入官方API，即使没有window.__TAURI__
-        try {
-          const { invoke } = await import('@tauri-apps/api/core');
-          // 尝试执行一个简单命令以确认API可用
-          await invoke('detect_hardware');
-          debugLog('官方API可用，确认Tauri环境');
-          isTauriEnv = true;
-          return true;
-        } catch (e) {
-          debugLog('尝试导入官方API失败，但环境标记存在', e);
-          // 因为环境标记存在，我们仍然认为在Tauri环境中
-          isTauriEnv = true;
-          return true;
-        }
-      }
-
-      // 尝试动态导入官方API，即使没有环境标记
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        // 尝试执行一个简单命令以确认API可用
-        await invoke('detect_hardware');
-        debugLog('官方API可用，确认Tauri环境，尽管没有环境标记');
-        isTauriEnv = true;
-        return true;
-      } catch (e) {
-        debugLog('尝试导入官方API失败', e);
-      }
-    }
-    
-    debugLog('不在Tauri环境中');
-    isTauriEnv = false;
-    return false;
-  } catch (error) {
-    debugLog('环境检测出错:', error);
-    isTauriEnv = false;
-    return false;
-  }
-}
-
-// 使用官方API进行调用
-async function callWithOfficialApi<T>(command: string, args?: Record<string, any>): Promise<T> {
-  try {
-    debugLog(`使用官方API调用: ${command}`);
-    const { invoke } = await import('@tauri-apps/api/core');
-    return await invoke<T>(command, args);
-  } catch (error) {
-    debugLog(`官方API调用失败: ${command}`, error);
-    throw error;
-  }
-}
-
-// API调用函数
-export async function invoke<T>(command: string, args?: Record<string, any>): Promise<T> {
-  debugLog(`调用命令: ${command}`, args);
-  
-  // 快速检查 - 如果window.__TAURI__已直接可用，立即使用官方API
-  if (typeof window !== 'undefined' && window.__TAURI__) {
-    try {
-      debugLog(`直接使用Tauri API: ${command}`);
-      const { invoke } = await import('@tauri-apps/api/core');
-      return await invoke<T>(command, args);
-    } catch (error) {
-      debugLog(`Tauri API直接调用失败: ${command}`, error);
-      // 直接错误传递，不进行复杂的降级流程，简化逻辑提高性能
-      throw error;
-    }
-  }
-  
-  // 如果没有直接可用的Tauri环境，完整检查环境
-  const inTauriEnv = await isTauriEnvironment();
-  
-  // 在Tauri环境中使用官方API
-  if (inTauriEnv) {
-    try {
-      return await callWithOfficialApi<T>(command, args);
-    } catch (error) {
-      debugLog(`官方API调用失败: ${command}`, error);
-      
-      // 在开发环境或测试环境中降级到模拟数据
-      if (process.env.NODE_ENV !== 'production') {
-        debugLog(`降级到模拟数据: ${command}`);
-        return await mockInvoke(command, args);
-      }
-      
-      throw error;
-    }
-  }
-  
-  // 非Tauri环境使用模拟数据
-  debugLog(`使用模拟数据: ${command}`);
-  return await mockInvoke(command, args);
-}
-
-// 等待Tauri API准备就绪
-export async function waitForTauriAPI(timeout = 15000): Promise<boolean> {
-  debugLog(`等待Tauri API准备就绪，超时时间: ${timeout}ms`);
-  
-  return new Promise((resolve) => {
-    // 立即检查API是否可用
-    if (typeof window !== 'undefined') {
-      // 直接检查Tauri对象
-      if (window.__TAURI__ || window.__TAURI_IPC__) {
-        debugLog('Tauri API已就绪(直接检测到__TAURI__或__TAURI_IPC__)');
-        return resolve(true);
-      }
-      
-      // 设置环境标记 - 确保标记存在
-      window.__IS_TAURI_APP__ = true;
-      
-      // 检查是否运行在Tauri环境中的简单方法
-      try {
-        // @ts-ignore - 这是Tauri特有的方法，用于检测环境
-        if (window.__TAURI_INTERNALS__) {
-          debugLog('检测到__TAURI_INTERNALS__，确认Tauri环境');
-          return resolve(true);
-        }
-      } catch (e) {
-        // 忽略错误
-      }
-    }
-    
-    // 定义一个监听器等待API就绪事件
-    let apiReadyEventRegistered = false;
-    
-    // 监听API就绪事件
-    if (typeof window !== 'undefined') {
-      const apiReadyHandler = () => {
-        debugLog('收到tauri-api-ready事件');
-        window.removeEventListener('tauri-api-ready', apiReadyHandler);
-        resolve(true);
-      };
-      
-      window.addEventListener('tauri-api-ready', apiReadyHandler, { once: true });
-      apiReadyEventRegistered = true;
-      debugLog('已注册tauri-api-ready事件监听器');
-    }
-    
-    // 后备机制：检查状态 - 减少检查次数提高性能
-    let checkCount = 0;
-    const maxChecks = 3; // 减少重试次数，提高性能
-    const checkInterval = timeout / maxChecks;
-    
-    function checkApiAvailability() {
-      // 再次检查是否已存在
-      if (typeof window !== 'undefined') {
-        if (window.__TAURI__ || window.__TAURI_IPC__) {
-          debugLog(`API检测成功 (尝试 ${checkCount}): 找到Tauri对象`);
-          return resolve(true);
-        }
-      }
-      
-      checkCount++;
-      debugLog(`检查API可用性 (${checkCount}/${maxChecks})`);
-      
-      // 尝试加载API
-      try {
-        import('@tauri-apps/api/core').then(api => {
-          debugLog('成功导入Tauri API');
-          return resolve(true);
-        }).catch(() => {
-          // 导入失败，继续检查流程
-          // 如果达到最大尝试次数，停止尝试
-          if (checkCount >= maxChecks) {
-            debugLog('等待Tauri API超时，降级到模拟模式');
-            return resolve(false);
-          }
-          
-          // 继续检查
-          setTimeout(checkApiAvailability, checkInterval);
-        });
-      } catch (e) {
-        // 导入出错，继续检查流程
-        if (checkCount >= maxChecks) {
-          debugLog('等待Tauri API超时，降级到模拟模式');
-          return resolve(false);
-        }
-        
-        // 继续检查
-        setTimeout(checkApiAvailability, checkInterval);
-      }
-    }
-    
-    // 开始检查
-    checkApiAvailability();
-    
-    // 设置总体超时 - 减少超时时间，提高响应速度
-    setTimeout(() => {
-      if (apiReadyEventRegistered) {
-        window.removeEventListener('tauri-api-ready', () => {
-          debugLog('移除过期的tauri-api-ready事件监听器');
-        });
-      }
-      
-      // 最后一次尝试
-      if (typeof window !== 'undefined' && (window.__TAURI__ || window.__TAURI_IPC__)) {
-        debugLog('最终检查：找到Tauri对象');
-        resolve(true);
-      } else {
-        debugLog('等待Tauri API超时，降级到模拟模式');
-        resolve(false);
-      }
-    }, timeout * 0.8); // 提前结束等待，提高响应速度
-  });
-}
-
-// 尝试刷新Tauri API状态
-export async function refreshTauriAPI(): Promise<boolean> {
-  debugLog('尝试刷新Tauri API状态');
-  
-  // 重置环境检测状态
-  isTauriEnv = null;
-  
-  // 如果在浏览器环境中，尝试监听环境注入事件
-  if (typeof window !== 'undefined') {
-    window.addEventListener('tauri-api-ready', () => {
-      debugLog('收到tauri-api-ready事件');
-      isTauriEnv = null; // 强制重新检测
-    }, { once: true });
-  }
-  
-  // 重新检测环境
-  return await isTauriEnvironment();
-}
-
-// 以下是具体的API方法，供前端直接调用
-
-// 检测硬件信息
-export async function detectHardware() {
-  // 如果已经有缓存的硬件信息，直接返回缓存
-  if (cachedHardwareInfo) {
-    debugLog('返回缓存的硬件信息');
-    return cachedHardwareInfo;
-  }
-  
-  // 否则调用API获取硬件信息
-  try {
-    const hardwareInfo = await invoke('detect_hardware');
-    // 缓存结果
-    cachedHardwareInfo = hardwareInfo;
-    return hardwareInfo;
-  } catch (error) {
-    debugLog('获取硬件信息失败，使用模拟数据', error);
-    // 错误情况下也返回一个基本信息以避免前端错误
-    const mockInfo = {
-      cpu: { architecture: 'unknown', model_name: 'mocked', cores: 4, is_arm: false },
-      memory: 8192,
-      tee: { sgx_supported: false, trustzone_supported: false, secure_enclave_supported: false, tee_type: 'none' }
-    };
-    cachedHardwareInfo = mockInfo;
-    return mockInfo;
-  }
-}
-
 // 清除硬件信息缓存（用于测试或需要强制刷新时）
 export function clearHardwareCache() {
   debugLog('清除硬件信息缓存');
   cachedHardwareInfo = null;
-}
-
-// 验证Passkey
-export async function verifyPasskey(challenge: string) {
-  return await invoke('verify_passkey', { challenge });
-}
-
-// 执行TEE操作
-export async function performTeeOperation(operation: string | Record<string, any>) {
-  return await invoke('perform_tee_operation', { operation });
-}
-
-// 获取TEE状态
-export async function getTeeStatus() {
-  return await invoke('get_tee_status');
-}
-
-// 初始化TEE环境
-export async function initializeTee() {
-  return await invoke('initialize_tee');
-}
-
-// 检查是否支持WebAuthn
-export async function isWebAuthnSupported() {
-  return await invoke('webauthn_supported');
-}
-
-// 检查是否支持生物识别
-export async function isBiometricSupported() {
-  return await invoke('webauthn_biometric_supported');
-}
-
-// 开始WebAuthn注册
-export async function startWebAuthnRegistration(username: string) {
-  return await invoke('webauthn_start_registration', { username });
-}
-
-// 完成WebAuthn注册
-export async function finishWebAuthnRegistration(userId: string, response: any) {
-  return await invoke('webauthn_finish_registration', {
-    user_id: userId,
-    response: JSON.stringify(response)
-  });
-}
-
-// 获取WebAuthn凭证
-export async function getWebAuthnCredentials(userId: string) {
-  return await invoke('webauthn_get_credentials', { user_id: userId });
 }
 
 // 设置硬件类型（仅用于测试）

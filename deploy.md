@@ -1,7 +1,7 @@
 # COS72-Tauri 部署与运行指南
 
 本文档详细说明了COS72-Tauri应用的初始化、编译、测试和发布步骤，包括前端(Node.js)和后端(Rust)部分。
-最后更新：v0.2.2
+最后更新：v0.4.1
 
 ## 先决条件
 
@@ -32,6 +32,113 @@
    - **Linux**: 
      - 基本构建工具 (`build-essential`)
      - WebKit2GTK (`libwebkit2gtk-4.0-dev`)
+
+## v0.4.1 更新说明 - Tauri 2.0前后端通信增强
+
+### 主要更新
+
+在v0.4.1版本中，我们对Tauri 2.0的前后端通信机制进行了全面优化，确保API的稳定性和可靠性。具体改进包括：
+
+1. **优化了Rust端的API注入**：
+   - 严格遵循Tauri 2.0官方文档实现API注入
+   - 改进DOM就绪事件处理程序
+   - 增强了API就绪状态检测
+   - 实现了标准化的事件系统接口
+
+2. **增强了前端API封装**：
+   - 升级到API版本0.4.1
+   - 更新类型定义，提供更好的TypeScript支持
+   - 实现了符合标准的事件API接口
+   - 增强了错误处理和重试机制
+
+### 安装与启动
+
+```bash
+# 安装依赖
+pnpm install
+
+# 开发模式启动
+pnpm run tauri:dev
+
+# 或使用提供的脚本(包含日志捕获)
+./run.sh
+```
+
+### 测试与验证
+
+v0.4.1专门添加了针对前后端通信的测试方法：
+
+1. **测试API可用性**：
+   
+   ```bash
+   # 使用内置诊断页面测试API可用性
+   # 启动应用后访问 /tauri-env-check 页面
+   pnpm run tauri:dev
+   ```
+
+2. **测试事件系统**：
+
+   ```bash
+   # 在应用控制台中可执行以下代码测试事件系统
+   window.__TAURI__.event.emit('test-event', { message: 'Hello from frontend' });
+   
+   # 在Rust日志中应当能看到事件被接收
+   ```
+
+3. **验证API就绪状态**：
+
+   在浏览器控制台中，可以观察到类似以下日志：
+   ```
+   [TAURI-API-0.4.1] - 检测Tauri环境
+   [TAURI-API-0.4.1] - 检测到__IS_TAURI_APP__标记
+   [TAURI-API-0.4.1] - 等待Tauri API准备就绪，超时时间: 10000ms，重试次数: 0
+   [TAURI-API-0.4.1] - 收到Tauri API就绪事件
+   [TAURI-API-0.4.1] - 确认Tauri API可用
+   ```
+
+### 故障排除
+
+如果遇到前后端通信问题，请尝试以下步骤：
+
+1. **检查API就绪状态**：
+   - 打开浏览器开发者工具
+   - 在控制台检查`window.__TAURI__`对象是否存在
+   - 执行`window.__TAURI__.invoke('detect_hardware')`测试API调用
+
+2. **重新注入API**：
+   - 在控制台执行`window.dispatchEvent(new CustomEvent('tauri-reinject-api'))`
+   - 查看是否有"API重新注入成功"的日志
+
+3. **检查Rust日志**：
+   - 查看终端输出，寻找"COS72-Tauri:"前缀的日志
+   - 确认"DOM就绪注入成功"等关键日志存在
+
+4. **类型错误处理**：
+   如果在编译时遇到TypeScript类型错误，确保所有Window接口扩展保持一致：
+   ```typescript
+   // 在所有使用window.__TAURI__的文件中保持一致的接口定义
+   interface Window {
+     __TAURI__?: {
+       invoke?: (cmd: string, args?: any) => Promise<any>;
+       // 其他API...
+     };
+   }
+   ```
+
+### 构建生产版本
+
+```bash
+# 构建前端
+pnpm build
+
+# 构建Tauri应用
+cd src-tauri && cargo build --release
+
+# 或使用Tauri CLI构建
+pnpm run tauri:build
+```
+
+生产构建会在`src-tauri/target/release`目录中创建可执行文件，以及在平台相应目录中创建安装包。
 
 ## v0.2.2 更新说明
 

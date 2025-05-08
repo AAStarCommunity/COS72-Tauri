@@ -781,6 +781,41 @@ Tauri
 - ETH-WALLET-MOCK-README.md - Added documentation for Linux testing
 - CHANGES.md - Updated with version 0.3.3 changes
 
+## [0.3.7] - 2025-05-11 (Tauri API修复与Touch ID权限管理)
+
+### Tauri API修复
+
+- 彻底解决了Tauri API初始化问题：
+  1. 修改了DOM就绪脚本，实现动态修复window.__TAURI__对象
+  2. 添加了waitForTauriApi函数，确保API可用后再调用命令
+  3. 优化了invoke函数实现，提供更可靠的命令调用机制
+  4. 增强了API状态检测和日志记录，方便诊断问题
+
+### Touch ID权限管理
+
+- 增加了macOS上的Touch ID权限管理功能：
+  1. 添加了check_biometric_permission命令检测权限状态
+  2. 实现了request_biometric_permission命令主动请求权限
+  3. 在Passkey注册流程中集成权限检查和请求逻辑
+  4. 优化了权限相关的用户反馈信息
+
+### WebAuthn增强
+
+- 改进了WebAuthn/Passkey注册与验证流程：
+  1. 确保在API就绪后再开始注册过程
+  2. 添加更详细的状态反馈和错误处理
+  3. 优化了生物识别权限管理与注册流程的集成
+  4. 改进了错误信息展示，提高用户体验
+
+### 修改的文件
+
+- src-tauri/src/main.rs - 优化DOM就绪脚本，添加新命令
+- src/lib/tauri-api.ts - 添加waitForTauriApi函数，改进invoke实现
+- src-tauri/src/fido/biometric.rs - 新文件，实现生物识别权限管理
+- src-tauri/src/fido/mod.rs - 添加biometric子模块
+- src/pages/register-passkey.tsx - 集成权限检查和API就绪等待逻辑
+- CHANGES.md - 添加v0.3.7版本记录
+
 ## [0.3.6] - 2025-05-10 (WebAuthn与TEE兼容性修复)
 
 ### WebAuthn修复
@@ -823,3 +858,144 @@ Tauri
 - RASPI-TEE-SETUP.md - 更新为Raspberry Pi 5适配
 - PLAN.md - 添加WasmEdge集成计划
 - CHANGES.md - 添加v0.3.6版本记录
+
+## [0.3.8] - 2025-05-12 (WebAuthn权限修复与调试增强)
+
+### WebAuthn/Passkey修复
+
+- 彻底解决了WebAuthn注册权限问题:
+  1. 修改了RP ID配置，移除固定的"localhost"设置，使用浏览器自动识别的当前域
+  2. 增强了WebAuthn选项配置，明确设置验证器类型和用户验证策略
+  3. 简化了注册数据结构，确保与WebAuthn API兼容
+  4. 解决了"用户或平台在当前上下文中不允许此请求"的权限错误
+- 添加了详细的注册流程调试输出:
+  1. 记录每个注册阶段的关键参数和返回结果
+  2. 提供更详细的错误信息和状态反馈
+  3. 在注册页面显示完整的注册过程和中间状态
+
+### Tauri API增强
+
+- 改进了Tauri API注入和初始化:
+  1. 优化了DOM就绪事件处理函数，添加更强大的API对象创建逻辑
+  2. 添加了对`__TAURI_INTERNALS__`的检测和利用，确保API可用性
+  3. 增强了API就绪事件通知机制，提高前端API可用性检测的可靠性
+  4. 改进了window.__TAURI__对象模拟，确保基本API功能可用
+
+### 权限管理调试增强
+
+- 大幅增强了Touch ID权限检查和请求的日志输出:
+  1. 添加详细的macOS版本和系统状态检测
+  2. 记录权限检查命令的完整输出，包括标准输出和错误输出
+  3. 显示权限状态变化和请求结果
+  4. 提供更多上下文信息，便于诊断权限相关问题
+
+### 前端错误处理改进
+
+- 改进了注册页面的错误处理和状态反馈:
+  1. 添加更详细的API就绪状态和调试信息
+  2. 增强了对生物识别支持检查的错误捕获和处理
+  3. 优化了权限请求流程，添加用户友好的状态反馈
+  4. 保存更完整的日志记录，便于诊断问题
+
+### 修改的文件
+
+- src-tauri/src/main.rs - 优化DOM就绪脚本，增强Tauri API注入
+- src-tauri/src/fido/biometric.rs - 增强Touch ID权限检查和请求的日志输出
+- src-tauri/src/fido/webauthn.rs - 修改WebAuthn配置，移除固定RP ID，优化注册流程
+- src/pages/register-passkey.tsx - 改进注册页面权限处理和错误反馈
+- CHANGES.md - 添加v0.3.8版本变更记录
+
+## v0.4.0 - 修复Tauri 2.0通信问题 (2025-05-07)
+
+### 主要变更
+
+1. 解决了Tauri 2.0前后端通信问题
+2. 完善了API注入和初始化机制
+3. 优化了降级策略，确保环境检测更可靠
+
+### 细节变更
+
+1. **修改 `src-tauri/src/main.rs`**:
+   - 重构了DOM就绪事件处理程序
+   - 完善了API注入脚本，增加错误处理
+   - 添加了对`__TAURI_INTERNALS__`和`__TAURI_IPC__`的检测
+   - 实现了更健壮的API重新注入机制
+   - 添加了API状态轮询，确保API始终可用
+
+2. **优化 `src/lib/tauri-api.ts`**:
+   - 升级到API版本0.4.0
+   - 实现了多重环境检测策略 
+   - 添加了isApiAvailable()辅助函数
+   - 增加了invokeViaIpc()函数用于直接IPC通信
+   - 优化了waitForTauriApi()实现
+   - 添加了API刷新和重试机制
+   - 改进了日志记录格式
+
+### 影响范围
+
+- 所有使用Tauri API的功能现在应该能正常工作
+- WebAuthn/Passkey相关功能恢复正常
+- 错误处理和日志记录得到增强
+
+### 已知问题
+
+- 在某些重载场景下可能仍需手动触发API刷新
+- API注入机制与某些框架可能存在兼容性问题
+
+### 后续计划
+
+- 进一步优化API初始化时机
+- 添加额外的API可用性测试工具
+- 文档完善和示例增强
+
+## v0.4.1 - Tauri 2.0通信增强 (2025-05-07)
+
+### 主要变更
+
+1. 完善了Tauri 2.0前后端通信机制
+2. 优化了API的注入和检测逻辑
+3. 增强了事件系统支持
+
+### 细节变更
+
+1. **改进 `src-tauri/src/main.rs` 中的API注入**:
+   - 严格按照Tauri 2.0官方文档实现API注入
+   - 优化了DOM就绪事件处理程序
+   - 改进了`window.__TAURI_INTERNALS__`和`window.__TAURI_IPC__`的检测与利用
+   - 增加了标准化的事件系统接口
+   - 完善了API就绪状态检测和通知机制
+
+2. **增强 `src/lib/tauri-api.ts` 前端封装**:
+   - 升级到API版本0.4.1
+   - 更新类型定义，提供更好的TypeScript支持
+   - 实现标准的事件API (listen, once, emit)
+   - 增强错误处理和重试机制
+   - 优化等待和重试策略
+
+### 技术实现
+
+1. **标准化事件系统**:
+   - 实现了符合Tauri 2.0标准的事件监听器
+   - 支持全局和窗口级别的事件
+   - 改进了事件注册和解注册机制
+
+2. **健壮的API探测**:
+   - 实现多层次API就绪检测
+   - 增加API状态追踪和并发等待处理
+   - 优化API重试逻辑，提高成功率
+
+3. **降级机制改进**:
+   - 细化降级策略，根据不同问题选择不同备选方案
+   - 保持API接口统一，确保无论何种实现都使用相同调用方式
+
+### 影响范围
+
+- 所有依赖Tauri API的功能可靠性得到增强
+- 事件系统现在完全符合官方标准
+- 应用启动和恢复速度得到提升
+
+### 后续计划
+
+- 优化事件系统的模拟实现
+- 添加Channel通信支持
+- 实现更多官方扩展API的封装

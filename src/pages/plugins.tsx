@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { invoke as invokeCommand, isTauriEnvironment, waitForTauriAPI, refreshTauriAPI } from '../lib/tauri-api';
+import { invoke as invokeCommand, isTauriEnvironment, waitForTauriApi } from '../lib/tauri-api';
+import Layout from '../components/Layout';
 
 // 硬件信息接口
 interface HardwareInfo {
@@ -40,6 +41,7 @@ export default function Plugins() {
   const [hardwareInfo, setHardwareInfo] = useState<HardwareInfo | null>(null);
   const [environment, setEnvironment] = useState<string>('检测中...');
   const [isLoading, setIsLoading] = useState(false);
+  const [pluginLoadError, setPluginLoadError] = useState<string | null>(null);
   
   // 检测环境
   useEffect(() => {
@@ -84,7 +86,7 @@ export default function Plugins() {
         // 等待Tauri API准备就绪
         const isTauri = await isTauriEnvironment();
         if (isTauri) {
-          const apiReady = await waitForTauriAPI(10000);
+          const apiReady = await waitForTauriApi(10000);
           if (!apiReady) {
             console.warn('等待Tauri API超时，将使用模拟数据');
             setStatus('无法连接到Tauri API，使用模拟数据');
@@ -113,7 +115,7 @@ export default function Plugins() {
               
               // 如果是Tauri环境但API调用失败，尝试刷新API
               if (isTauri) {
-                const refreshed = await refreshTauriAPI();
+                const refreshed = await waitForTauriApi(10000);
                 console.log(`API刷新${refreshed ? '成功' : '失败'}`);
               }
               

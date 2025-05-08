@@ -8,6 +8,8 @@ mod fido;
 mod tee;
 mod plugin;
 
+// 将biometric.rs添加到fido模块
+use fido::biometric;
 use hardware::detect;
 use fido::webauthn;
 use tee::{TeeOperation, TeeResult};
@@ -41,7 +43,9 @@ fn main() {
             webauthn_start_registration,
             webauthn_finish_registration,
             webauthn_get_credentials,
-            webauthn_finish_authentication
+            webauthn_finish_authentication,
+            check_biometric_permission,
+            request_biometric_permission
         ])
         // 应用初始化事件处理
         .setup(|app| {
@@ -65,57 +69,264 @@ fn main() {
                     println!("COS72-Tauri: 初始注入成功");
                 }
                 
-                // 监听DOM就绪事件
+                // 在应用初始化时记录基本信息
+                println!("COS72-Tauri: 应用信息 - 版本: 0.4.1");
+                println!("COS72-Tauri: 运行平台: {}", std::env::consts::OS);
+                
+                // 监听DOM就绪事件 - 这是Tauri 2.0注入API的关键时机
                 let window_clone = window.clone();
                 window.listen("tauri://dom-ready", move |_event| {
-                    println!("COS72-Tauri: DOM就绪事件触发");
+                    println!("COS72-Tauri: DOM就绪事件触发，注入Tauri API");
                     
-                    // 发送DOM就绪事件到前端
-                    let dom_ready_script = r#"
-                        console.log('[TAURI-INJECT] DOM已就绪');
-                        
-                        // 确保环境标记存在
-                        window.__IS_TAURI_APP__ = true;
-                        
-                        // 调试Tauri对象
-                        console.log('[TAURI-INJECT] 检查Tauri对象:', {
-                            __TAURI__: typeof window.__TAURI__ !== 'undefined',
-                            __TAURI_IPC__: typeof window.__TAURI_IPC__ !== 'undefined'
-                        });
-                        
-                        // 如果Tauri对象不存在，尝试重新注入
-                        if (typeof window.__TAURI__ === 'undefined') {
-                            console.log('[TAURI-INJECT] 尝试重新注入Tauri对象');
-                            // 通知前端需要刷新页面
-                            const refreshEvent = new CustomEvent('tauri-refresh-needed', {
-                                detail: { reason: 'Missing Tauri API' }
-                            });
-                            window.dispatchEvent(refreshEvent);
+                    // 先清空任何现有的注入对象，避免冲突
+                    let cleanup_script = r#"
+                        if (window.__TAURI__) {
+                            console.log('[TAURI-INJECT] 清理已存在的Tauri对象');
+                            delete window.__TAURI__;
                         }
-                        
-                        // 触发API就绪事件
-                        console.log('[TAURI-INJECT] 发送API就绪事件');
-                        const apiReadyEvent = new CustomEvent('tauri-api-ready', {
-                            detail: { version: '2.0.0' }
-                        });
-                        window.dispatchEvent(apiReadyEvent);
+                        if (window.__TAURI_IPC__) {
+                            delete window.__TAURI_IPC__;
+                        }
+                        if (window.__TAURI_INTERNALS__) {
+                            delete window.__TAURI_INTERNALS__;
+                        }
                     "#;
                     
-                    // 执行注入
-                    if let Err(e) = window_clone.eval(dom_ready_script) {
-                        println!("COS72-Tauri: DOM就绪注入失败: {:?}", e);
+                    if let Err(e) = window_clone.eval(cleanup_script) {
+                        println!("COS72-Tauri: 清理现有对象失败: {:?}", e);
+                    }
+                    
+                    // 直接注入核心IPC对象，确保通信管道首先建立
+                    let ipc_init_script = r#"
+                        window.__TAURI_IPC__ = {
+                            postMessage: function(message) {
+                                window.ipcNative.postMessage(message);
+                                return true;
+                            },
+                            // 2.0版本需要添加这些参数以确保向下兼容
+                            metadata: {
+                                version: '2.0.0'
+                            }
+                        };
+                        window.__TAURI_INTERNALS__ = window.__TAURI_INTERNALS__ || {};
+                        
+                        // 设置状态标志以便前端库可以更好地检测
+                        window.__TAURI_IPC_READY__ = true;
+                        console.log('[TAURI-INJECT] IPC通道已注入');
+                    "#;
+                    
+                    if let Err(e) = window_clone.eval(ipc_init_script) {
+                        println!("COS72-Tauri: IPC通道注入失败: {:?}", e);
                     } else {
-                        println!("COS72-Tauri: DOM就绪注入成功");
+                        println!("COS72-Tauri: IPC通道注入成功");
+                    }
+                    
+                    // Tauri 2.0 API注入脚本 - 修改为更简单直接的方式
+                    let api_script = r#"
+                        console.log('[TAURI-INJECT] DOM已就绪，开始API初始化');
+                        
+                        try {
+                            // 确保基础对象存在
+                            window.__TAURI__ = window.__TAURI__ || {};
+                            
+                            // 直接实现invoke函数，不依赖于其他可能不可用的对象
+                            window.__TAURI__.invoke = function(cmd, args) {
+                                console.log('[TAURI-API] 调用命令:', cmd);
+                                
+                                return new Promise((resolve, reject) => {
+                                    if (!window.__TAURI_IPC__ || typeof window.__TAURI_IPC__.postMessage !== 'function') {
+                                        reject(new Error('IPC通道不可用'));
+                                        return;
+                                    }
+                                    
+                                    // 生成唯一请求ID
+                                    const requestId = 'req_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
+                                    
+                                    // 响应处理函数
+                                    const responseHandler = function(event) {
+                                        try {
+                                            if (typeof event.data === 'string') {
+                                                const response = JSON.parse(event.data);
+                                                if (response && response.id === requestId) {
+                                                    window.removeEventListener('message', responseHandler);
+                                                    clearTimeout(timeoutId);
+                                                    if (response.success) {
+                                                        resolve(response.data);
+                                                    } else {
+                                                        reject(response.error || new Error('调用失败'));
+                                                    }
+                                                }
+                                            }
+                                        } catch (e) {
+                                            // 忽略非JSON消息
+                                        }
+                                    };
+                                    
+                                    // 监听响应
+                                    window.addEventListener('message', responseHandler);
+                                    
+                                    // 添加超时处理
+                                    const timeoutId = setTimeout(() => {
+                                        window.removeEventListener('message', responseHandler);
+                                        reject(new Error(`命令 ${cmd} 调用超时`));
+                                    }, 30000);
+                                    
+                                    // 准备请求
+                                    const request = {
+                                        cmd: '__tauri_invoke',
+                                        id: requestId,
+                                        command: cmd,
+                                        ...args
+                                    };
+                                    
+                                    // 发送请求
+                                    try {
+                                        window.__TAURI_IPC__.postMessage(JSON.stringify(request));
+                                    } catch (error) {
+                                        clearTimeout(timeoutId);
+                                        window.removeEventListener('message', responseHandler);
+                                        reject(error);
+                                    }
+                                });
+                            };
+                            
+                            // 实现事件API
+                            window.__TAURI__.event = window.__TAURI__.event || {};
+                            
+                            // 实现事件监听函数
+                            window.__TAURI__.event.listen = function(event, callback) {
+                                console.log('[TAURI-EVENT] 注册事件监听:', event);
+                                
+                                // 创建唯一的监听器ID
+                                const listenerId = 'listener_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
+                                
+                                // 创建消息处理器
+                                const messageHandler = function(msgEvent) {
+                                    try {
+                                        if (typeof msgEvent.data === 'string') {
+                                            const data = JSON.parse(msgEvent.data);
+                                            if (data && data.type === 'event' && data.event === event) {
+                                                callback({
+                                                    id: listenerId,
+                                                    event: event,
+                                                    payload: data.payload || null
+                                                });
+                                            }
+                                        }
+                                    } catch (e) {
+                                        // 忽略非JSON消息
+                                    }
+                                };
+                                
+                                // 注册消息处理器
+                                window.addEventListener('message', messageHandler);
+                                
+                                // 发送注册监听请求
+                                try {
+                                    const request = {
+                                        cmd: '__tauri_listen',
+                                        id: listenerId,
+                                        event: event
+                                    };
+                                    window.__TAURI_IPC__.postMessage(JSON.stringify(request));
+                                } catch (error) {
+                                    console.error('[TAURI-EVENT] 注册事件监听失败:', error);
+                                }
+                                
+                                // 返回解除监听函数
+                                return function() {
+                                    window.removeEventListener('message', messageHandler);
+                                    try {
+                                        const request = {
+                                            cmd: '__tauri_unlisten',
+                                            id: listenerId
+                                        };
+                                        window.__TAURI_IPC__.postMessage(JSON.stringify(request));
+                                    } catch (error) {
+                                        console.error('[TAURI-EVENT] 解除事件监听失败:', error);
+                                    }
+                                };
+                            };
+                            
+                            // 实现once函数
+                            window.__TAURI__.event.once = function(event, callback) {
+                                const unlisten = window.__TAURI__.event.listen(event, (eventData) => {
+                                    unlisten();
+                                    callback(eventData);
+                                });
+                                return unlisten;
+                            };
+                            
+                            // 实现emit函数
+                            window.__TAURI__.event.emit = function(event, payload) {
+                                console.log('[TAURI-EVENT] 触发事件:', event);
+                                return new Promise((resolve, reject) => {
+                                    try {
+                                        const request = {
+                                            cmd: '__tauri_emit',
+                                            event: event,
+                                            payload: payload
+                                        };
+                                        window.__TAURI_IPC__.postMessage(JSON.stringify(request));
+                                        resolve();
+                                    } catch (error) {
+                                        console.error('[TAURI-EVENT] 触发事件失败:', error);
+                                        reject(error);
+                                    }
+                                });
+                            };
+                            
+                            // 添加文件转换API
+                            window.__TAURI__.convertFileSrc = function(filePath, protocol) {
+                                return 'tauri://' + (protocol || 'asset') + '/' + filePath;
+                            };
+                            
+                            // 设置API准备就绪标志
+                            window.__TAURI_API_INITIALIZED__ = true;
+                            
+                            // 触发API就绪事件
+                            const apiReadyEvent = new CustomEvent('tauri-api-ready', {
+                                detail: {
+                                    success: true,
+                                    version: '2.0.0',
+                                    timestamp: new Date().toISOString()
+                                }
+                            });
+                            
+                            console.log('[TAURI-INJECT] Tauri API初始化成功');
+                            window.dispatchEvent(apiReadyEvent);
+                            
+                        } catch (error) {
+                            console.error('[TAURI-INJECT] API初始化错误:', error);
+                        }
+                    "#;
+                    
+                    if let Err(e) = window_clone.eval(api_script) {
+                        println!("COS72-Tauri: API注入失败: {:?}", e);
+                    } else {
+                        println!("COS72-Tauri: API注入成功");
+                    }
+                });
+                
+                // 添加API重新注入机制
+                window.listen("tauri-reinject-api", move |_event| {
+                    println!("COS72-Tauri: 收到API重新注入请求");
+                    
+                    // 触发DOM就绪事件，重新注入API
+                    if let Err(e) = window.emit("tauri://dom-ready", ()) {
+                        println!("COS72-Tauri: 触发DOM就绪事件失败: {:?}", e);
+                    } else {
+                        println!("COS72-Tauri: 已触发DOM就绪事件，重新注入API");
                     }
                 });
             } else {
-                println!("COS72-Tauri: 无法获取主窗口，跳过注入环境标识符");
+                println!("COS72-Tauri: 未找到主窗口，无法配置");
             }
             
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("COS72-Tauri: 应用运行失败");
+        .expect("Tauri应用运行失败");
 }
 
 // 检测硬件信息的处理函数
@@ -350,6 +561,19 @@ async fn initialize_tee() -> Result<bool, String> {
             Err(format!("TEE初始化失败: {:?}", e))
         }
     }
+}
+
+// 新增命令
+#[tauri::command]
+fn check_biometric_permission() -> Result<bool, String> {
+    println!("COS72-Tauri: 调用check_biometric_permission命令");
+    biometric::check_biometric_permission()
+}
+
+#[tauri::command]
+fn request_biometric_permission() -> Result<bool, String> {
+    println!("COS72-Tauri: 调用request_biometric_permission命令");
+    biometric::request_biometric_permission()
 }
 
 // 单元测试

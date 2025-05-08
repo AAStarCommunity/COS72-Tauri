@@ -6,10 +6,15 @@ use std::time::Duration;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use base64::{Engine as _, engine::general_purpose};
-use serde_json;
+use serde_json::Value;
 use url::Url;
 use webauthn_rs::prelude::*;
-use tracing::info;
+use tracing::{info, error, debug};
+use uuid::Uuid;
+use lazy_static::lazy_static;
+use serde_json::json;
+use webauthn_rs::Webauthn;
+use webauthn_rs_core::proto::UserVerificationPolicy;
 
 // Global registration state store (for testing only)
 // In a real application, this would be persisted in a database
@@ -43,40 +48,66 @@ fn credential_id_to_string(cred_id: &webauthn_rs::prelude::CredentialID) -> Stri
 }
 
 // Start registration process
-pub fn start_registration(username: &str) -> Result<serde_json::Value, String> {
-    info!("COS72-Tauri: Starting registration process, username: {}", username);
+pub fn start_registration(username: &str) -> Result<Value, String> {
+    println!("COS72-Tauri: 开始WebAuthn注册流程，用户名: {}", username);
     
-    // Create user ID
+    // 创建更安全的用户ID
     let user_id = Uuid::new_v4();
+    println!("COS72-Tauri: 生成用户ID: {}", user_id);
     
-    // Create registration challenge using PassKey flow
-    match WEBAUTHN_INSTANCE.start_passkey_registration(
+    // 创建WebAuthn实例
+    println!("COS72-Tauri: 创建WebAuthn配置，使用自动RP ID");
+    
+    // 使用已存在的WebAuthn实例
+    println!("COS72-Tauri: 使用已存在的WebAuthn实例");
+    
+    let webauthn = &*WEBAUTHN_INSTANCE;
+    
+    println!("COS72-Tauri: WebAuthn实例获取成功");
+    
+    // 改进注册选项，明确需要平台验证器
+    println!("COS72-Tauri: 创建注册选项...");
+    let policy = UserVerificationPolicy::Required;
+    let (ccr, reg_state) = match webauthn.start_passkey_registration(
         user_id,
         username,
         username,
-        None, // No additional credentials
+        None,
     ) {
-        Ok((ccr, reg_state)) => {
-            // Store registration state
-            let mut states = REGISTRATION_STATES.lock().unwrap();
-            states.insert(user_id.to_string(), reg_state);
-            
-            // Convert to format needed by frontend
-            let challenge_json = serde_json::to_value(&ccr).map_err(|e| format!("Failed to serialize challenge: {}", e))?;
-            info!("COS72-Tauri: Registration challenge created successfully, user ID: {}", user_id);
-            
-            // Return challenge and user ID
-            let mut res = serde_json::Map::new();
-            res.insert("challenge".to_string(), challenge_json);
-            res.insert("user_id".to_string(), serde_json::Value::String(user_id.to_string()));
-            
-            Ok(serde_json::Value::Object(res))
-        },
+        Ok(result) => result,
         Err(e) => {
-            info!("COS72-Tauri: Failed to create registration challenge: {}", e);
-            Err(format!("Failed to create registration challenge: {}", e))
+            println!("COS72-Tauri: 注册开始失败: {}", e);
+            return Err(format!("注册开始失败: {}", e));
         }
-    }
+    };
+    
+    println!("COS72-Tauri: 成功创建注册请求");
+    println!("COS72-Tauri: 注册状态类型: {:?}", reg_state);
+    
+    // 保存注册状态到全局存储
+    let mut states = REGISTRATION_STATES.lock().unwrap();
+    states.insert(user_id.to_string(), reg_state);
+    
+    // 将注册挑战数据转换为前端格式
+    println!("COS72-Tauri: 构建前端注册数据...");
+    
+    // 将ccr转换为JSON值
+    let ccr_json = match serde_json::to_value(&ccr) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("COS72-Tauri: 序列化挑战数据失败: {}", e);
+            return Err(format!("序列化挑战数据失败: {}", e));
+        }
+    };
+    
+    // 构建结果JSON，包含挑战和用户ID
+    let result = json!({
+        "challenge": ccr_json,
+        "user_id": user_id.to_string()
+    });
+    
+    println!("COS72-Tauri: 返回注册信息: {}", result);
+    Ok(result)
 }
 
 // Complete registration process

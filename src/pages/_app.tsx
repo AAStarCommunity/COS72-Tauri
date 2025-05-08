@@ -1,57 +1,53 @@
 import React, { useEffect } from 'react'
 import type { AppProps } from 'next/app'
 import '../styles/globals.css'
-import { waitForTauriAPI, isTauriEnvironment } from '../lib/tauri-api'
+import { waitForTauriApi, isTauriEnvironment } from '../lib/tauri-api'
 
 // 扩展Window类型
 declare global {
   interface Window {
     __IS_TAURI_APP__?: boolean;
-    __TAURI__?: any;
-    __TAURI_IPC__?: any;
+    __TAURI__?: {
+      invoke?: (cmd: string, args?: any) => Promise<any>;
+      convertFileSrc?: (filePath: string, protocol?: string) => string;
+      event?: {
+        listen: (event: string, callback: (event: any) => void) => (() => void);
+        once: (event: string, callback: (event: any) => void) => (() => void);
+        emit: (event: string, payload?: any) => Promise<void>;
+      };
+      [key: string]: any;
+    };
+    __TAURI_IPC__?: {
+      postMessage: (message: string) => void;
+    };
+    __TAURI_INTERNALS__?: any;
     __TAURI_API_INITIALIZED__?: boolean;
   }
 }
 
-function MyApp({ Component, pageProps }: AppProps) {
+export default function App({ Component, pageProps }: AppProps) {
   // 初始化Tauri API
   useEffect(() => {
-    const initTauriAPI = async () => {
+    // 应用启动时初始化Tauri API
+    const initTauriApi = async () => {
+      console.log('正在初始化Tauri环境...');
+      
       try {
-        // 设置全局标记
-        if (typeof window !== 'undefined') {
-          // 确保环境标记存在
-          window.__IS_TAURI_APP__ = true;
-          
-          // 添加调试信息
-          console.log('检查Tauri环境初始化...');
-          console.log('window.__TAURI__:', window.__TAURI__ ? '存在' : '不存在');
-          console.log('window.__TAURI_IPC__:', window.__TAURI_IPC__ ? '存在' : 'undefined');
+        const isTauri = await isTauriEnvironment();
+        if (isTauri) {
+          console.log('检测到Tauri环境，等待API就绪...');
+          await waitForTauriApi(10000);
+          console.log('Tauri API初始化完成');
+        } else {
+          console.log('非Tauri环境，使用模拟API');
         }
-        
-        // 等待Tauri API加载 - 减少等待时间，提高响应速度
-        const apiReady = await waitForTauriAPI(3000);
-        console.log(`Tauri API 初始化${apiReady ? '成功' : '失败'}`);
-        
-        // 即使API未就绪也触发事件，以便允许降级到模拟数据
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new Event('tauri-api-ready'));
-          // 为后续页面访问设置一个标记
-          window.__TAURI_API_INITIALIZED__ = true;
-        }
-      } catch (error) {
-        console.error('Tauri API 初始化失败:', error);
-        // 即使失败也触发事件，以便系统可以降级到模拟数据
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new Event('tauri-api-ready'));
-        }
+      } catch (err) {
+        console.error('Tauri API初始化失败:', err);
       }
     };
     
-    initTauriAPI();
+    initTauriApi();
   }, []);
   
   return <Component {...pageProps} />
-}
-
-export default MyApp 
+} 

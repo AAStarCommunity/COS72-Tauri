@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 // 导入新的API包装器，而不是直接使用@tauri-apps/api
-import { invoke as invokeCommand, isTauriEnvironment, waitForTauriAPI, refreshTauriAPI } from '../lib/tauri-api';
+import { invoke as invokeCommand, isTauriEnvironment, waitForTauriApi } from '../lib/tauri-api';
 import Layout from '../components/Layout';
 
 // 硬件信息接口
@@ -76,7 +76,7 @@ export default function Home() {
         if (isTauri) {
           console.log('检测到Tauri环境，等待API就绪...');
           // 增加等待时间
-          const apiReady = await waitForTauriAPI(10000); // 增加到10秒
+          const apiReady = await waitForTauriApi(10000); // 增加到10秒
           if (!apiReady) {
             console.warn('等待Tauri API超时，将使用模拟数据');
             setStatus('无法连接到Tauri API，使用模拟数据');
@@ -109,7 +109,7 @@ export default function Home() {
               
               // 如果是Tauri环境但API调用失败，尝试刷新API
               if (isTauri) {
-                const refreshed = await refreshTauriAPI();
+                const refreshed = await waitForTauriApi(10000);
                 console.log(`API刷新${refreshed ? '成功' : '失败'}`);
               }
               
@@ -206,7 +206,7 @@ export default function Home() {
       if (isTauri) {
         console.log('Tauri环境中进行签名，确认API就绪状态...');
         // 增加等待时间
-        const apiReady = await waitForTauriAPI(10000);
+        const apiReady = await waitForTauriApi(10000);
         if (!apiReady) {
           console.warn('Tauri API未就绪，使用模拟数据');
           setStatus('API未就绪，使用模拟数据');
@@ -240,7 +240,7 @@ export default function Home() {
             
             // 如果是Tauri环境但API调用失败，尝试刷新API
             if (isTauri) {
-              const refreshed = await refreshTauriAPI();
+              const refreshed = await waitForTauriApi(10000);
               console.log(`API刷新${refreshed ? '成功' : '失败'}`);
             }
             
@@ -285,7 +285,7 @@ export default function Home() {
       // 确保API就绪
       const isTauri = await isTauriEnvironment();
       if (isTauri) {
-        const apiReady = await waitForTauriAPI(3000);
+        const apiReady = await waitForTauriApi(10000);
         if (!apiReady) {
           console.warn('Tauri API未就绪，使用模拟数据');
           setStatus('API未就绪，使用模拟数据');
@@ -314,7 +314,7 @@ export default function Home() {
       // 确保API就绪
       const isTauri = await isTauriEnvironment();
       if (isTauri) {
-        const apiReady = await waitForTauriAPI(3000);
+        const apiReady = await waitForTauriApi(3000);
         if (!apiReady) {
           console.warn('Tauri API未就绪，使用模拟数据');
           setStatus('API未就绪，使用模拟数据');
