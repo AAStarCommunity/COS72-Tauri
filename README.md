@@ -1,6 +1,8 @@
 # COS72-Tauri
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)Tauri based COS72（Community Operation System 72） application framework, include web version.
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+Tauri based COS72（Community Operation System 72） application framework, include web version.
 本项目目标是基于Tauri框架开发可以跨平台运行的客户端，而这个客户端也可以成为为别人提供的服务器端。
 如果检测用户硬件如果符合标准，则下载Rust开发的插件，然后运行，为其他客户端提供服务，例如运行Rust程序（teaclave），例如：https://github.com/apache/incubator-teaclave-trustzone-sdk/tree/main/projects/web3
 我们三步走：
